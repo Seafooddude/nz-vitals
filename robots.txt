@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://nz-vitals.pages.dev/sitemap.xml

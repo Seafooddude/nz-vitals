@@ -3,24 +3,68 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NZ Vitals</title>
-  <meta name="description" content="A running read on the health of the New Zealand economy: inflation, jobs, growth, interest rates and the exchange rate, on one page.">
+  <title>NZ Vitals | New Zealand Economy Dashboard</title>
+  <meta name="description" content="Dashboard of New Zealand's economy: inflation, unemployment, the Official Cash Rate and NZD/USD, updated automatically from Stats NZ and the RBNZ.">
+  <meta name="theme-color" content="#006bb6">
+  <link rel="canonical" href="https://nz-vitals.pages.dev/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="NZ Vitals">
+  <meta property="og:title" content="NZ Vitals | New Zealand Economy Dashboard">
+  <meta property="og:description" content="Inflation, unemployment, the Official Cash Rate and NZD/USD on one page.">
+  <meta property="og:url" content="https://nz-vitals.pages.dev/">
+  <meta property="og:locale" content="en_NZ">
+  <meta name="twitter:card" content="summary">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "NZ Vitals",
+    "url": "https://nz-vitals.pages.dev/",
+    "description": "A running read on the health of the New Zealand economy.",
+    "inLanguage": "en-NZ"
+  }
+  </script>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <header class="site-header">
-    <div class="wrap">
-      <h1>NZ Vitals</h1>
-      <p class="tagline">A running read on the health of the New Zealand economy.</p>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="index.html"><span class="logo" aria-hidden="true">NZ</span><span class="brand-name">NZ Vitals</span></a>
+      <span class="asof">As of <span id="asof">–</span></span>
+      <nav class="nav" aria-label="Main">
+        <a href="#key-indicators">Key indicators</a>
+        <a href="#questions">Questions</a>
+        <a href="#trends">Trends</a>
+        <a href="about.html">About</a>
+      </nav>
     </div>
   </header>
 
-  <main class="wrap">
+  <main id="main" class="wrap">
     <p id="status" class="status">Loading data…</p>
     <div id="notice" class="notice" hidden>
-      Draft site: figures shown are placeholder data until the data pipeline is connected to official sources.
+      Draft site: items marked "Placeholder" show sample figures until they are connected to official sources.
     </div>
-    <section id="grid" class="grid" aria-live="polite"></section>
+
+    <section id="key-indicators">
+      <h2 class="section-title">Key Indicators</h2>
+      <div id="tiles" class="tiles"></div>
+    </section>
+
+    <section id="questions">
+      <h2 class="section-title">The NZ Economy in Four Questions</h2>
+      <div id="qgrid" class="qgrid"></div>
+    </section>
+
+    <section id="trends">
+      <h2 class="section-title">Trends</h2>
+      <p class="hint">Hover over (or tap) a chart to see the values.</p>
+      <div id="grid" class="grid"></div>
+    </section>
+
+    <noscript><p class="status">This dashboard needs JavaScript to draw its charts. Data sources: Stats NZ and the Reserve Bank of New Zealand.</p></noscript>
   </main>
 
   <footer class="site-footer">
