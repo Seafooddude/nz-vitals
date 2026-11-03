@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en-NZ">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NZ Vitals</title>
+  <meta name="description" content="A running read on the health of the New Zealand economy: inflation, jobs, growth, interest rates and the exchange rate, on one page.">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <h1>NZ Vitals</h1>
+      <p class="tagline">A running read on the health of the New Zealand economy.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <p id="status" class="status">Loading data…</p>
+    <div id="notice" class="notice" hidden>
+      Draft site: figures shown are placeholder data until the data pipeline is connected to official sources.
+    </div>
+    <section id="grid" class="grid" aria-live="polite"></section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Data: Stats NZ, Reserve Bank of New Zealand, The Treasury. Last updated: <span id="updated">–</span>.</p>
+      <p><a href="about.html">About &amp; methodology</a></p>
+    </div>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
