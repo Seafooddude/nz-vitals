@@ -7,6 +7,7 @@
   <meta name="description" content="How NZ Vitals works: which New Zealand economic indicators it tracks, where the data comes from and its limitations.">
   <meta name="theme-color" content="#006bb6">
   <link rel="canonical" href="https://nz-vitals.pages.dev/about.html">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -22,22 +23,52 @@
     </div>
   </header>
 
+  <!-- DRAFT: these notes are a starting point. Rewrite them in your own words; this page is where your economics thinking shows. -->
   <main class="wrap prose">
     <h1>About &amp; methodology</h1>
+
     <h2>What this is</h2>
-    <p>NZ Vitals tracks a handful of headline indicators of the New Zealand economy on one page. It updates automatically when official data is released.</p>
+    <p>NZ Vitals is a one-page read on the health of the New Zealand economy: growth, jobs, inflation, interest rates and the exchange rate. It is built as a static website that rebuilds itself from official data, so the numbers refresh without manual work. It is a New Zealand take on the US site Econvitals.</p>
 
     <h2>Indicators</h2>
-    <p>For each indicator, write a short paragraph here: what it measures, why it matters, and how to read it. This is the part of the site that shows your economics thinking.</p>
+    <p>Items marked "Coming soon" on the dashboard are not yet connected to official data.</p>
 
-    <h2>Sources</h2>
+    <h3>Growth and jobs</h3>
+    <p><strong>Real GDP (quarterly growth).</strong> The change in the volume of goods and services New Zealand produces, adjusted for inflation. It is the broadest measure of whether the economy is expanding or shrinking. Source: Stats NZ.</p>
+    <p><strong>Unemployment rate.</strong> The share of the labour force that has no job and is actively looking for one, from the Household Labour Force Survey. It is a lagging indicator: it tends to rise after the economy has already slowed. Source: Stats NZ.</p>
+    <p><strong>Wage growth.</strong> Annual growth in the Labour Cost Index, which tracks what employers pay for the same job over time. Fast wage growth can keep inflation high, while slow growth squeezes household budgets. Source: Stats NZ.</p>
+
+    <h3>Prices</h3>
+    <p><strong>CPI inflation.</strong> The annual change in the Consumers Price Index, the main measure of inflation. The Reserve Bank aims to keep it between 1% and 3% over the medium term, focusing on 2%. Source: Stats NZ.</p>
+    <p><strong>Non-tradables inflation.</strong> Inflation in goods and services that are not traded internationally, such as rents, rates, insurance and local services. Because it is driven by domestic demand and costs, the Reserve Bank watches it closely as a sign of underlying inflation pressure. Source: Stats NZ.</p>
+    <p><strong>House prices.</strong> The annual change in house prices. Housing is the largest asset for most New Zealand households, so price changes affect wealth, spending and borrowing. Planned source: REINZ.</p>
+
+    <h3>Interest rates and markets</h3>
+    <p><strong>Official Cash Rate (OCR).</strong> The Reserve Bank's policy interest rate, set at scheduled reviews during the year. Raising it makes borrowing dearer and cools spending and inflation; cutting it does the opposite. The chart shows the last six changes plus the latest day. Source: Reserve Bank of New Zealand (table B2).</p>
+    <p><strong>10-year government bond yield.</strong> The interest rate the government pays to borrow for ten years, taken from the secondary-market closing yield. It reflects expectations for inflation and the OCR, and it anchors longer-term fixed mortgage rates. The chart shows the last observation of each month for a year, plus the latest day. Source: Reserve Bank of New Zealand (table B2).</p>
+    <p><strong>NZX 50.</strong> An index of the 50 largest companies listed on the New Zealand sharemarket, a quick read on investor confidence. Planned source: NZX.</p>
+
+    <h3>The NZ dollar and trade</h3>
+    <p><strong>NZD/USD.</strong> US dollars per New Zealand dollar. A weaker NZ dollar makes imports dearer, which tends to lift inflation, and helps exporters. Source: Reserve Bank of New Zealand (table B1).</p>
+    <p><strong>NZ dollar (TWI).</strong> The trade-weighted index measures the NZ dollar against a basket of 17 currencies, weighted by trade with each country. It gives a fuller picture than any single exchange rate. Source: Reserve Bank of New Zealand (table B1).</p>
+    <p><strong>Dairy price (GDT).</strong> The Global Dairy Trade whole milk powder price in US dollars per tonne. Dairy is New Zealand's largest export, so this price influences farm incomes, export earnings and the NZ dollar. Planned source: Global Dairy Trade.</p>
+
+    <h2>How the data is handled</h2>
     <ul>
-      <li>Stats NZ: CPI, unemployment, GDP</li>
-      <li>Reserve Bank of New Zealand: OCR, exchange rate, bond yields</li>
+      <li>A scheduled job downloads the official files, checks each value is plausible, and rebuilds the site. If a download or check fails, the last good data stays on the page.</li>
+      <li>Daily series are summarised as the last observation of each month, plus the latest day.</li>
+      <li>Series are replaced in full on each update, so revisions made by the source agencies flow through.</li>
     </ul>
 
+    <h2>Sources and licensing</h2>
+    <ul>
+      <li>Reserve Bank of New Zealand statistical tables B1 (exchange rates) and B2 (wholesale interest rates), used under the terms on the Reserve Bank's copyright page.</li>
+      <li>Stats NZ releases, which are generally available under a Creative Commons Attribution licence.</li>
+    </ul>
+    <p>This site summarises and rearranges source data. It is independent and is not endorsed by any of these organisations.</p>
+
     <h2>Limitations</h2>
-    <p>Data is revised by the source agencies. This site always shows the latest published series. It is not financial advice.</p>
+    <p>Data is revised by the source agencies, and releases can arrive later than the date shown. If the page cannot refresh, a notice appears when the newest figure is more than ten days old. This site is for general information only and is not financial advice.</p>
   </main>
 
   <footer class="site-footer">

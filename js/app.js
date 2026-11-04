@@ -14,7 +14,23 @@
     ocr: { label: "Official Cash Rate", change: "ytd", changeNote: "YTD", step: true,
            tip: "The Reserve Bank's policy interest rate. It sets the tone for mortgage and savings rates." },
     nzdusd: { label: "NZD / USD", change: "ytd", changeNote: "YTD",
-           tip: "US dollars per New Zealand dollar. A higher number means a stronger NZ dollar." }
+           tip: "US dollars per New Zealand dollar. A higher number means a stronger NZ dollar." },
+    gdp: { label: "Real GDP", suffix: "q/q", change: "prev", changeNote: "vs prev. qtr",
+           tip: "Quarterly growth in the volume of goods and services produced in New Zealand, adjusted for inflation." },
+    wages: { label: "Wage growth", suffix: "y/y", change: "prev", changeNote: "vs prev. qtr",
+           tip: "Annual growth in the Labour Cost Index: what employers pay for the same job. Feeds into inflation." },
+    nontradables: { label: "Non-tradables", suffix: "y/y", change: "prev", changeNote: "vs prev. qtr",
+           tip: "Annual inflation in goods and services not traded internationally (rents, rates, insurance, services). It is generated at home, so the RBNZ watches it closely." },
+    houses: { label: "House prices", suffix: "y/y", change: "prev", changeNote: "vs prev. month",
+           tip: "Annual change in house prices. Housing is a big part of household wealth and spending in New Zealand." },
+    bond10: { label: "10-year govt bond", change: "ytd", changeNote: "YTD",
+           tip: "The interest rate the government pays to borrow for 10 years. It anchors long-term fixed mortgage rates." },
+    nzx50: { label: "NZX 50", change: "ytd", changeNote: "YTD",
+           tip: "Index of the 50 largest companies listed on the New Zealand sharemarket." },
+    gdt: { label: "Dairy price (GDT)", change: "ytd", changeNote: "YTD",
+           tip: "Global Dairy Trade whole milk powder price in US dollars per tonne. Dairy is New Zealand's biggest export, so this drives farm incomes and the NZ dollar." },
+    twi: { label: "NZ dollar (TWI)", change: "ytd", changeNote: "YTD",
+           tip: "Trade-weighted index: the NZ dollar against a basket of our main trading partners' currencies." }
   };
 
   // The four question cards. rows: [label, indicator id, metric].
@@ -53,6 +69,8 @@
 
   function fmt(v, unit) {
     if (unit === "NZD/USD") return Number(v).toFixed(4);
+    if (unit === "US$/t") return "US$" + Math.round(v).toLocaleString("en-NZ");
+    if (unit === "index") return v >= 1000 ? Math.round(v).toLocaleString("en-NZ") : Number(v).toFixed(1);
     var n = Number(v).toFixed(2).replace(/0$/, ""); // 2.75, 2.5, 5.0
     return unit === "%" ? n + "%" : n;
   }
@@ -112,9 +130,15 @@
 
   function tile(ind) {
     var c = CFG[ind.id] || { label: ind.name, tip: "" };
-    var chg = c.change ? delta(ind, c.change) : null;
     var el = document.createElement("div");
     el.className = "tile";
+    if (ind.placeholder) {  // not connected yet: no figures, just the label
+      el.className += " soon";
+      el.innerHTML = '<span class="label" title="' + esc(c.tip) + '">' + esc(c.label) + "</span>" +
+        '<div class="tile-value">–</div><span class="tag">Coming soon</span>';
+      return el;
+    }
+    var chg = c.change ? delta(ind, c.change) : null;
     el.innerHTML =
       '<span class="label" title="' + esc(c.tip) + '">' + esc(c.label) + "</span>" +
       '<div class="tile-value">' + esc(fmt(latest(ind).value, ind.unit)) +
@@ -131,11 +155,12 @@
     q.rows.forEach(function (r) {
       var ind = by[r[1]];
       if (!ind) return;
-      if (ind.placeholder) sample = true;
+      if (ind.placeholder) { sample = true; return; }
       var yr = parseInt(latest(ind).date.slice(0, 4), 10) - 1;
       html += '<div class="qrow"><span>' + esc(r[0].replace("{y}", yr)) + "</span><b>" + esc(metric(ind, r[2])) + "</b></div>";
     });
-    el.innerHTML = "<h3>" + esc(q.title) + (sample ? '<span class="tag">Placeholder</span>' : "") + "</h3>" + html +
+    el.innerHTML = "<h3>" + esc(q.title) + (sample ? '<span class="tag">Coming soon</span>' : "") + "</h3>" +
+      (sample && !html ? '<p class="soon-text">Not connected to official data yet.</p>' : html) +
       '<p class="qnote">' + esc(q.note) + '</p><a class="qlink" href="#trend-' + esc(q.link) + '">See trend →</a>';
     return el;
   }
@@ -146,10 +171,10 @@
     el.id = "trend-" + ind.id;
     el.innerHTML =
       "<h2>" + esc(ind.name) + '<span class="tag">' + esc(ind.frequency) + "</span>" +
-        (ind.placeholder ? '<span class="tag">Placeholder</span>' : "") + "</h2>" +
-      '<div class="chart-host"></div>' +
-      '<p class="summary">' + esc(caption(ind)) + "</p>" +
-      '<p class="source">Source: <a href="' + esc(ind.url) + '">' + esc(ind.source) + "</a></p>";
+        (ind.placeholder ? '<span class="tag">Coming soon</span>' : "") + "</h2>" +
+      (ind.placeholder ? '<p class="soon-text">Not connected to official data yet.</p>'
+        : '<div class="chart-host"></div><p class="summary">' + esc(caption(ind)) + "</p>") +
+      '<p class="source">' + (ind.placeholder ? "Planned source: " : "Source: ") + '<a href="' + esc(ind.url) + '">' + esc(ind.source) + "</a></p>";
     return el;
   }
 
@@ -178,7 +203,7 @@
     }).join("");
 
     host.innerHTML =
-      '<svg class="chart" viewBox="0 0 ' + W + " " + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="' + esc(ind.name) + ' trend chart">' +
+      '<svg class="chart" viewBox="0 0 ' + W + " " + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="' + esc(ind.name) + " trend chart. " + esc(caption(ind)) + ' Use the arrow keys to read each value.">' +
       '<line class="axis" x1="' + L + '" y1="' + (H - B) + '" x2="' + (W - R) + '" y2="' + (H - B) + '"/>' +
       '<path class="line" d="' + d + '"/>' + dots +
       '<line class="hline" y1="' + T + '" y2="' + (H - B) + '" visibility="hidden"/>' +
@@ -192,6 +217,10 @@
     function move(e) {
       var r = svg.getBoundingClientRect(), mx = (e.clientX - r.left) * (W / r.width), k = 0, best = Infinity;
       xs.forEach(function (x, j) { var dist = Math.abs(x - mx); if (dist < best) { best = dist; k = j; } });
+      show(k);
+    }
+    function show(k) {
+      cur = k;
       hl.setAttribute("x1", xs[k]); hl.setAttribute("x2", xs[k]); hl.setAttribute("visibility", "visible");
       hd.setAttribute("cx", xs[k]); hd.setAttribute("cy", ys[k]); hd.setAttribute("visibility", "visible");
       tip.innerHTML = "<span>" + esc(fmtDate(s[k])) + "</span><strong>" + esc(fmt(s[k].value, ind.unit)) + "</strong>";
@@ -206,6 +235,18 @@
     svg.addEventListener("pointermove", move);
     svg.addEventListener("pointerdown", move);
     svg.addEventListener("pointerleave", hide);
+    // Keyboard: Tab to the chart, then use the arrow keys to step through the points.
+    var cur = s.length - 1;
+    svg.setAttribute("tabindex", "0");
+    svg.addEventListener("focus", function () { show(cur); });
+    svg.addEventListener("blur", hide);
+    svg.addEventListener("keydown", function (e) {
+      var step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 :
+                 e.key === "Home" ? -s.length : e.key === "End" ? s.length : 0;
+      if (!step) return;
+      e.preventDefault();
+      show(Math.max(0, Math.min(s.length - 1, cur + step)));
+    });
   }
 
   // Draw now and redraw whenever the card changes width (rotation, resize).
@@ -237,12 +278,22 @@
       data.indicators.forEach(function (ind) {
         var card = trendCard(ind);
         $("grid").appendChild(card);
-        mountChart(card.querySelector(".chart-host"), ind);
+        var host = card.querySelector(".chart-host");
+        if (host) mountChart(host, ind);
       });
 
+      // "As of" = the date of the newest real (non-placeholder) observation.
+      var real = data.indicators.filter(function (i) { return !i.placeholder; })
+        .map(function (i) { return latest(i).date; }).sort().pop();
       var when = data.updated ? isoToText(data.updated) : "–";
       $("updated").textContent = when;
-      $("asof").textContent = when;
+      $("asof").textContent = real ? isoToText(real) : when;
+      // Warn visitors if the robot has stopped and the numbers have gone stale.
+      if (real && (Date.now() - Date.parse(real)) / 864e5 > 10) {
+        $("stale").textContent = "The newest figure on this page is from " + isoToText(real) +
+          ". Automatic updates may have stopped.";
+        $("stale").hidden = false;
+      }
       $("notice").hidden = !data.placeholder;
       $("status").remove();
     })

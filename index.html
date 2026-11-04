@@ -13,7 +13,9 @@
   <meta property="og:description" content="Inflation, unemployment, the Official Cash Rate and NZD/USD on one page.">
   <meta property="og:url" content="https://nz-vitals.pages.dev/">
   <meta property="og:locale" content="en_NZ">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:image" content="https://nz-vitals.pages.dev/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://nz-vitals.pages.dev/og-image.png">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -24,6 +26,7 @@
     "inLanguage": "en-NZ"
   }
   </script>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -43,10 +46,12 @@
   </header>
 
   <main id="main" class="wrap">
+    <p class="intro">NZ Vitals is a one-page dashboard of the New Zealand economy. It tracks the Official Cash Rate, the NZ dollar and the 10-year government bond yield from the Reserve Bank of New Zealand, with Stats NZ measures of growth, jobs, wages and inflation coming soon.</p>
     <p id="status" class="status">Loading data…</p>
     <div id="notice" class="notice" hidden>
-      Draft site: items marked "Placeholder" show sample figures until they are connected to official sources.
+      Draft site: greyed-out items marked "Coming soon" are not connected to official data yet.
     </div>
+    <div id="stale" class="notice warn" role="status" hidden></div>
 
     <section id="key-indicators">
       <h2 class="section-title">Key Indicators</h2>
@@ -69,7 +74,7 @@
 
   <footer class="site-footer">
     <div class="wrap">
-      <p>Data: Stats NZ, Reserve Bank of New Zealand, The Treasury. Last updated: <span id="updated">–</span>.</p>
+      <p>Data: Reserve Bank of New Zealand and Stats NZ. Last updated: <span id="updated">–</span>.</p>
       <p><a href="about.html">About &amp; methodology</a></p>
     </div>
   </footer>
