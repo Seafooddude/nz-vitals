@@ -39,6 +39,7 @@
       <nav class="nav" aria-label="Main">
         <a href="#key-indicators">Key indicators</a>
         <a href="#questions">Questions</a>
+        <a href="#regions">Regions</a>
         <a href="#trends">Trends</a>
         <a href="about.html">About</a>
       </nav>
@@ -46,7 +47,7 @@
   </header>
 
   <main id="main" class="wrap">
-    <p class="intro">NZ Vitals is a one-page dashboard of the New Zealand economy. It tracks the Official Cash Rate, the NZ dollar and the 10-year government bond yield from the Reserve Bank of New Zealand, with Stats NZ measures of growth, jobs, wages and inflation coming soon.</p>
+    <p class="intro">NZ Vitals is a one-page dashboard of the New Zealand economy. It tracks the Official Cash Rate, the NZ dollar and the 10-year government bond yield from the Reserve Bank of New Zealand, and earnings by region from Stats NZ, with Stats NZ measures of growth, jobs, wages and inflation coming soon.</p>
     <p id="status" class="status">Loading data…</p>
     <div id="notice" class="notice" hidden>
       Draft site: greyed-out items marked "Coming soon" are not connected to official data yet.
@@ -61,6 +62,12 @@
     <section id="questions">
       <h2 class="section-title">The NZ Economy in Four Questions</h2>
       <div id="qgrid" class="qgrid"></div>
+    </section>
+
+    <section id="regions">
+      <h2 class="section-title">Earnings by Region</h2>
+      <p class="hint">Hover over (or tap, or tab to) a region to see the details.</p>
+      <div id="regions-body"></div>
     </section>
 
     <section id="trends">

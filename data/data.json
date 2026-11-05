@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-04",
+  "updated": "2026-11-05",
   "placeholder": true,
   "indicators": [
     {
@@ -294,5 +294,118 @@
         }
       ]
     }
-  ]
+  ],
+  "regions": {
+    "title": "Earnings by region",
+    "source": "Stats NZ",
+    "url": "https://explore.data.stats.govt.nz/",
+    "latest": "2026",
+    "previous": "2025",
+    "periodLabel": "June 2026",
+    "national": {
+      "median_hourly": 35.32,
+      "median_weekly": 1391.0,
+      "people": 2873.9,
+      "prev_median_hourly": 34.27,
+      "prev_median_weekly": 1343.0
+    },
+    "items": [
+      {
+        "median_hourly": 32.25,
+        "median_weekly": 1227.0,
+        "people": 88.3,
+        "prev_median_hourly": 32.08,
+        "prev_median_weekly": 1253.0,
+        "name": "Northland"
+      },
+      {
+        "median_hourly": 36.71,
+        "median_weekly": 1440.0,
+        "people": 979.6,
+        "prev_median_hourly": 35.55,
+        "prev_median_weekly": 1400.0,
+        "name": "Auckland"
+      },
+      {
+        "median_hourly": 33.56,
+        "median_weekly": 1340.0,
+        "people": 274.0,
+        "prev_median_hourly": 32.0,
+        "prev_median_weekly": 1280.0,
+        "name": "Waikato"
+      },
+      {
+        "median_hourly": 34.5,
+        "median_weekly": 1304.0,
+        "people": 185.8,
+        "prev_median_hourly": 33.36,
+        "prev_median_weekly": 1287.0,
+        "name": "Bay of Plenty"
+      },
+      {
+        "median_hourly": 33.56,
+        "median_weekly": 1320.0,
+        "people": 115.8,
+        "prev_median_hourly": 34.52,
+        "prev_median_weekly": 1344.0,
+        "name": "Gisborne/Hawke's Bay"
+      },
+      {
+        "median_hourly": 34.91,
+        "median_weekly": 1370.0,
+        "people": 66.2,
+        "prev_median_hourly": 34.01,
+        "prev_median_weekly": 1400.0,
+        "name": "Taranaki"
+      },
+      {
+        "median_hourly": 33.56,
+        "median_weekly": 1343.0,
+        "people": 138.0,
+        "prev_median_hourly": 32.0,
+        "prev_median_weekly": 1260.0,
+        "name": "Manawatu-Whanganui"
+      },
+      {
+        "median_hourly": 40.31,
+        "median_weekly": 1573.0,
+        "people": 320.3,
+        "prev_median_hourly": 37.58,
+        "prev_median_weekly": 1472.0,
+        "name": "Wellington"
+      },
+      {
+        "median_hourly": 32.79,
+        "median_weekly": 1240.0,
+        "people": 108.2,
+        "prev_median_hourly": 32.83,
+        "prev_median_weekly": 1216.0,
+        "name": "Nelson/Tasman/Marlborough/West Coast"
+      },
+      {
+        "median_hourly": 35.0,
+        "median_weekly": 1381.0,
+        "people": 396.6,
+        "prev_median_hourly": 34.52,
+        "prev_median_weekly": 1343.0,
+        "name": "Canterbury"
+      },
+      {
+        "median_hourly": 33.33,
+        "median_weekly": 1290.0,
+        "people": 145.6,
+        "prev_median_hourly": 33.56,
+        "prev_median_weekly": 1327.0,
+        "name": "Otago"
+      },
+      {
+        "median_hourly": 33.38,
+        "median_weekly": 1304.0,
+        "people": 55.5,
+        "prev_median_hourly": 30.21,
+        "prev_median_weekly": 1236.0,
+        "name": "Southland"
+      }
+    ]
+  }
 }

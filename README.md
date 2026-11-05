@@ -10,7 +10,7 @@ about.html            methodology (write your own indicator notes here)
 css/style.css         all styling (Helvetica, white / black / Knicks blue)
 js/app.js             renders cards + SVG charts from data/data.json
 data/data.json        the only data file the site reads
-data/raw/             fallback copies of the RBNZ spreadsheets (see below)
+data/raw/             fallback copies of the source files (RBNZ spreadsheets + Stats NZ earnings CSV)
 favicon.svg, og-image.png, sitemap.xml, robots.txt, _headers   site extras
 scripts/update_data.py  fetch + validate + write data.json (fetchers are stubs)
 .github/workflows/update.yml  daily cron that runs the script and commits
@@ -49,3 +49,15 @@ If the data goes more than 10 days without updating, the site shows a "may have 
 Indicators with `"placeholder": true` in `data/data.json` show as greyed-out boxes with no figures. To connect one,
 write its fetcher in `scripts/update_data.py` and add it to the `FETCHERS` list; the flag clears itself.
 Check the licence terms for NZX and Global Dairy Trade data before connecting those two.
+
+## Earnings by region (Stats NZ API)
+
+The regions section reads Stats NZ's Aotearoa Data Explorer, dataflow `INC_INC_001`, through its API.
+
+One-off setup:
+1. Create an account at https://portal.apis.stats.govt.nz, open Explore APIs > Aotearoa Data Explorer > Subscribe, then copy your key from Profile.
+2. In your GitHub repo: Settings > Secrets and variables > Actions > New repository secret. Name it `STATSNZ_API_KEY` and paste the key.
+   Never put the key in a file or commit it (this repo is public).
+
+If the key is missing or the API call fails, the script uses `data/raw/INC_INC_001.csv` and prints a NOTE or WARNING in the
+Actions log. The figures only change once a year, so that copy is fine until the next release.

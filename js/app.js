@@ -262,6 +262,64 @@
     else { render(); window.addEventListener("resize", render); }
   }
 
+  // ---- earnings by region ---------------------------------------------------
+
+  function renderRegions(r, host) {
+    if (!r) {
+      host.innerHTML = '<p class="soon-text">Not connected to official data yet.</p>';
+      return;
+    }
+    var mode = "hourly";
+    var money = function (v, m) {
+      return "$" + (m === "hourly" ? Number(v).toFixed(2) : Math.round(v).toLocaleString("en-NZ"));
+    };
+    var change = function (cur, prev) {
+      if (prev == null) return "";
+      var p = (cur - prev) / prev * 100;
+      return (p > 0 ? "+" : p < 0 ? "−" : "") + Math.abs(p).toFixed(1) + "% on " + r.previous;
+    };
+
+    function draw() {
+      var key = mode === "hourly" ? "median_hourly" : "median_weekly";
+      var unit = mode === "hourly" ? " per hour" : " per week";
+      var rows = r.items.slice().sort(function (a, b) { return b[key] - a[key]; });
+      var max = Math.max.apply(null, rows.map(function (i) { return i[key]; }).concat(r.national[key])) * 1.08;
+      var nat = r.national[key] / max * 100;
+
+      host.innerHTML =
+        '<div class="seg" role="group" aria-label="Earnings measure">' +
+          ["hourly", "weekly"].map(function (m) {
+            return '<button type="button" data-m="' + m + '" aria-pressed="' + (m === mode) + '">Median ' + m + "</button>";
+          }).join("") + "</div>" +
+        '<div class="rlist">' + rows.map(function (i) {
+          var ch = change(i[key], i["prev_" + key]);
+          return '<div class="rrow" tabindex="0">' +
+            '<span class="rname">' + esc(i.name) + "</span>" +
+            '<span class="rtrack"><span class="rbar" style="width:' + (i[key] / max * 100).toFixed(1) + '%"></span>' +
+              '<span class="rnat" style="left:' + nat.toFixed(1) + '%"></span></span>' +
+            '<span class="rval">' + esc(money(i[key], mode)) + "</span>" +
+            '<div class="rtip" role="tooltip"><span>' + esc(i.name) + " · " + esc(r.periodLabel) + "</span>" +
+              "<strong>" + esc(money(i[key], mode) + unit) + "</strong>" +
+              "<span>" + esc((ch ? ch + " · " : "") + Math.round(i.people * 1000).toLocaleString("en-NZ") + " people") + "</span></div>" +
+            "</div>";
+        }).join("") + "</div>" +
+        '<p class="rnote">Median ' + mode + " earnings of people in paid employment, " + esc(r.periodLabel) +
+          ". Dashed line: New Zealand overall (" + esc(money(r.national[key], mode)) + "). Source: " +
+          '<a href="' + esc(r.url) + '">Stats NZ</a>. Survey estimates, so smaller regions can move around from year to year. ' +
+          "Earnings from paid employment only: benefits and investment income are not included.</p>";
+    }
+
+    host.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-m]");
+      if (!b || b.getAttribute("data-m") === mode) return;
+      mode = b.getAttribute("data-m");
+      draw();
+      var again = host.querySelector('button[data-m="' + mode + '"]');
+      if (again) again.focus();
+    });
+    draw();
+  }
+
   // ---- start ----------------------------------------------------------------
 
   fetch("data/data.json", { cache: "no-cache" })
@@ -275,6 +333,7 @@
 
       data.indicators.forEach(function (ind) { $("tiles").appendChild(tile(ind)); });
       QUESTIONS.forEach(function (q) { $("qgrid").appendChild(question(q, by)); });
+      renderRegions(data.regions, $("regions-body"));
       data.indicators.forEach(function (ind) {
         var card = trendCard(ind);
         $("grid").appendChild(card);

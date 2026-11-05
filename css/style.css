@@ -100,6 +100,32 @@ a:focus-visible { outline: 3px solid var(--black); outline-offset: 2px; }
 .intro { margin: 20px 0 0; max-width: 760px; color: var(--grey); }
 .prose h3 { font-size: 0.95rem; margin: 24px 0 4px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--grey); }
 
+/* Earnings by region */
+.seg { display: inline-flex; border: 1px solid var(--black); border-radius: 6px; overflow: hidden; margin: 0 0 14px; }
+.seg button { font: inherit; font-size: 0.85rem; background: var(--white); color: var(--black); border: 0; padding: 6px 14px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--black); }
+.seg button[aria-pressed="true"] { background: var(--blue); color: var(--white); }
+.seg button:focus-visible { outline: 3px solid var(--black); outline-offset: -3px; }
+.rlist { display: grid; gap: 2px; }
+.rrow { position: relative; display: grid; grid-template-columns: minmax(120px, 230px) 1fr 64px; align-items: center; gap: 12px; padding: 5px 6px; border-radius: 6px; }
+.rrow:hover, .rrow:focus { background: #f2f7fb; outline: none; }
+.rrow:focus-visible { outline: 2px solid var(--blue); }
+.rname { font-size: 0.9rem; }
+.rtrack { position: relative; height: 18px; background: #f0f0f0; border-radius: 3px; }
+.rbar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--blue); border-radius: 3px; }
+.rnat { position: absolute; top: -3px; bottom: -3px; border-left: 2px dashed var(--black); }
+.rval { font-weight: 700; text-align: right; font-size: 0.9rem; }
+.rtip { display: none; position: absolute; left: 240px; bottom: calc(100% - 2px); background: var(--black); color: var(--white); font-size: 0.75rem; line-height: 1.35; padding: 6px 10px; border-radius: 5px; z-index: 3; white-space: nowrap; pointer-events: none; }
+.rtip span, .rtip strong { display: block; }
+.rtip span { opacity: 0.75; }
+.rrow:hover .rtip, .rrow:focus .rtip { display: block; }
+.rnote { font-size: 0.8rem; color: var(--grey); margin: 14px 0 0; max-width: 760px; }
+@media (max-width: 600px) {
+  .rrow { grid-template-columns: 1fr 60px; row-gap: 4px; }
+  .rname { grid-column: 1 / -1; }
+  .rtip { left: 6px; white-space: normal; max-width: calc(100% - 12px); }
+}
+
 /* Footer */
 .site-footer { border-top: 1px solid var(--line); padding: 20px 0 40px; font-size: 0.85rem; color: var(--grey); }
 .site-footer p { margin: 4px 0; }

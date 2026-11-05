@@ -12,6 +12,7 @@ Design rules:
 Testing without the network: set NZV_B2_FILE / NZV_B1_FILE to downloaded copies
 of hb2-daily-close.xlsx / hb1-daily.xlsx.
 """
+import csv
 import io
 import json
 import os
@@ -44,16 +45,18 @@ def bump_sitemap(today):
     SITEMAP_FILE.write_text(new)
 
 
-def http_get(url):
+BROWSER_HEADERS = {
     # Some sites refuse requests that don't look like a normal browser visit.
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                      "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        "Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*;q=0.8",
-        "Accept-Language": "en-NZ,en;q=0.9",
-        "Referer": "https://www.rbnz.govt.nz/statistics",
-    }
-    req = urllib.request.Request(url, headers=headers)
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    "Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*;q=0.8",
+    "Accept-Language": "en-NZ,en;q=0.9",
+    "Referer": "https://www.rbnz.govt.nz/statistics",
+}
+
+
+def http_get(url, headers=None):
+    req = urllib.request.Request(url, headers=headers or BROWSER_HEADERS)
     with urllib.request.urlopen(req, timeout=60) as resp:
         return resp.read()
 
@@ -187,6 +190,104 @@ FETCHERS = {"cpi": fetch_cpi, "unemployment": fetch_unemployment,
             "twi": fetch_twi, "bond10": fetch_bond10}
 
 
+# ---- Earnings by region: Stats NZ Aotearoa Data Explorer (dataflow INC_INC_001) ----
+# The query is the one the Explorer's "Developer API" panel gives for: all regions,
+# all measures, all years, total ethnic groups / both sexes / all ages.
+# Needs a free key from https://portal.apis.stats.govt.nz (set as STATSNZ_API_KEY).
+ADE_URL = ("https://api.data.stats.govt.nz/rest/data/STATSNZ,INC_INC_001,1.0/"
+           ".98..98.98.?dimensionAtObservation=AllDimensions")
+ADE_FALLBACK = RAW_DIR / "INC_INC_001.csv"
+REGION_NAMES = {
+    "1": "Northland", "2": "Auckland", "3": "Waikato", "4": "Bay of Plenty",
+    "5": "Gisborne/Hawke's Bay", "6": "Taranaki", "7": "Manawatu-Whanganui",
+    "8": "Wellington", "9": "Nelson/Tasman/Marlborough/West Coast",
+    "10": "Canterbury", "11": "Otago", "12": "Southland",
+    "98": "New Zealand",
+}
+MEASURES = {"MED_HOUR_INC": "median_hourly", "MED_WEEK_INC": "median_weekly", "NO_PEOPLE": "people"}
+LIMITS = {"median_hourly": (10, 80), "median_weekly": (300, 4000), "people": (1, 3000)}
+
+
+def ade_text():
+    """CSV text: test file, else the Stats NZ API (if a key is set), else data/raw copy."""
+    local = os.environ.get("NZV_ADE_FILE")
+    if local:
+        return Path(local).read_text(encoding="utf-8-sig")
+    key = os.environ.get("STATSNZ_API_KEY")
+    if key:
+        try:
+            headers = {"Ocp-Apim-Subscription-Key": key, "Accept": "application/vnd.sdmx.data+csv",
+                       "User-Agent": "nz-vitals-data-bot/1.0"}
+            text = http_get(ADE_URL, headers).decode("utf-8-sig")
+            if "OBS_VALUE" not in text.split("\n", 1)[0]:
+                raise ValueError("response was not SDMX-CSV")
+            return text
+        except Exception as exc:
+            print(f"WARNING: Stats NZ API request failed ({exc}); using data/raw/{ADE_FALLBACK.name}.",
+                  file=sys.stderr)
+    else:
+        print("NOTE: STATSNZ_API_KEY is not set; using the copy in data/raw/.", file=sys.stderr)
+    return ADE_FALLBACK.read_text(encoding="utf-8-sig")
+
+
+def _find(cols, *names):
+    """Find a column by id, tolerating 'ID: label' style headers."""
+    for n in names:
+        for c in cols:
+            if c.strip() == n or c.strip().startswith(n + ":"):
+                return c
+    raise ValueError(f"column {names[0]} not found (columns: {', '.join(cols)[:200]})")
+
+
+def _code(value):
+    """'6' and '6: Taranaki Region' both give '6'."""
+    return value.split(":", 1)[0].strip()
+
+
+def fetch_regions():
+    reader = csv.DictReader(io.StringIO(ade_text()))
+    cols = reader.fieldnames or []
+    c_per = _find(cols, "PERIOD_INC_INC_001", "TIME_PERIOD")
+    c_reg = _find(cols, "LGR_INC_INC_001")
+    c_mea = _find(cols, "MEASURE_INC_INC_001")
+    c_val = _find(cols, "OBS_VALUE")
+
+    cells = {}  # (year, region code, measure) -> value
+    for row in reader:
+        measure = MEASURES.get(_code(row[c_mea]))
+        if measure is None or not (row[c_val] or "").strip():
+            continue
+        region = _code(row[c_reg])
+        if region not in REGION_NAMES:
+            raise ValueError(f"unknown region code {region!r}: Stats NZ may have changed the regions")
+        cells[(row[c_per].strip()[:4], region, measure)] = float(row[c_val])
+
+    years = sorted({k[0] for k in cells})
+    if len(years) < 2:
+        raise ValueError("fewer than two years of data")
+    latest, previous = years[-1], years[-2]
+
+    items, national = [], None
+    for code, name in REGION_NAMES.items():
+        cur = {m: cells.get((latest, code, m)) for m in MEASURES.values()}
+        if None in cur.values():
+            raise ValueError(f"{name}: missing {latest} figures")
+        for m, v in cur.items():
+            lo, hi = LIMITS[m]
+            if not lo <= v <= hi:
+                raise ValueError(f"{name} {m} out of range: {v}")
+        entry = dict(cur,
+                     prev_median_hourly=cells.get((previous, code, "median_hourly")),
+                     prev_median_weekly=cells.get((previous, code, "median_weekly")))
+        if code == "98":
+            national = entry
+        else:
+            items.append(dict(entry, name=name))
+    return {"title": "Earnings by region", "source": "Stats NZ",
+            "url": "https://explore.data.stats.govt.nz/", "latest": latest, "previous": previous,
+            "periodLabel": f"June {latest}", "national": national, "items": items}
+
+
 def validate(meta, series):
     if not series or len(series) < 2:
         raise ValueError("series too short")
@@ -221,13 +322,21 @@ def main():
                 entry["placeholder"] = True
         out.append(entry)
 
+    regions = old.get("regions")
+    try:
+        regions = fetch_regions()
+    except Exception as exc:  # keep the previous regions block
+        errors.append(f"regions: {exc}")
+
     # Only treat it as an update if the numbers actually changed. This stops
     # a pointless commit and redeploy every day when nothing new was published.
     today = date.today().isoformat()
-    changed = out != old.get("indicators")
+    changed = out != old.get("indicators") or regions != old.get("regions")
     result = {"updated": today if changed else old.get("updated", today),
               "placeholder": any(e.get("placeholder") for e in out),
               "indicators": out}
+    if regions:
+        result["regions"] = regions
     DATA_FILE.write_text(json.dumps(result, indent=2) + "\n")
     if changed:
         bump_sitemap(today)
