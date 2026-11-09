@@ -21,6 +21,7 @@ jobs:
       - name: Fetch and validate data
         env:
           STATSNZ_API_KEY: ${{ secrets.STATSNZ_API_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: python scripts/update_data.py
       - name: Commit if changed
         if: always()
