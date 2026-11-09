@@ -127,7 +127,7 @@ INDICATORS = [
     _ind("gdp", "Real GDP growth (q/q)", "%", "Quarterly", "OECD via FRED", "https://fred.stlouisfed.org/series/NAEXKP01NZQ657S", -15, 15),
     _ind("wages", "Wage growth (annual)", "%", "Quarterly", "Stats NZ", STATS, -2, 10),
     _ind("unemployment", "Unemployment rate", "%", "Quarterly", "OECD via FRED", "https://fred.stlouisfed.org/series/LRUNTTTTNZQ156S", 0, 20),
-    _ind("cpi", "Annual CPI inflation", "%", "Quarterly", "Stats NZ", STATS, -5, 20),
+    _ind("cpi", "Annual CPI inflation", "%", "Quarterly", "OECD", "https://data-explorer.oecd.org/", -5, 20),
     _ind("nontradables", "Non-tradables inflation (annual)", "%", "Quarterly", "Stats NZ", STATS, -5, 15),
     _ind("houses", "House price growth (annual)", "%", "Monthly", "REINZ", "https://www.reinz.co.nz/", -30, 40),
     _ind("ocr", "Official Cash Rate", "%", "Per RBNZ review", RBNZ, "https://www.rbnz.govt.nz/statistics/b2", 0, 10),
@@ -139,8 +139,39 @@ INDICATORS = [
 ]
 
 
-def fetch_cpi():
-    raise NotImplementedError("TODO: Stats NZ CPI (Aotearoa Data Explorer API or CSV)")
+OECD_CPI_URL = ("https://sdmx.oecd.org/public/rest/data/OECD.SDD.TPS,DSD_PRICES@DF_PRICES_ALL,1.0/"
+                "NZL.Q.N.CPI.PA._T.N.GY?dimensionAtObservation=AllDimensions&format=csvfilewithlabels")
+
+
+def _oecd_csv(text):
+    """OECD SDMX CSV -> {'2026-Q3': 3.71, ...} (quarterly rows only)."""
+    out = {}
+    for row in csv.DictReader(io.StringIO(text)):
+        q, v = row.get("TIME_PERIOD", ""), row.get("OBS_VALUE", "")
+        if re.fullmatch(r"\d{4}-Q[1-4]", q) and v not in ("", "NaN"):
+            out[q] = float(v)
+    return out
+
+
+def fetch_cpi(quarters=12):
+    """Annual CPI inflation (growth over 1 year) for New Zealand from the OECD's SDMX API (no key).
+
+    Falls back to data/raw/OECD_CPI_NZL.csv if the download fails or looks wrong.
+    """
+    data = {}
+    try:
+        data = _oecd_csv(http_get(OECD_CPI_URL, {"User-Agent": "nz-vitals-data-bot/1.0"}).decode("utf-8-sig"))
+        if len(data) < 20:
+            raise ValueError("too few rows")
+    except Exception as exc:
+        print(f"WARNING: OECD CPI download failed ({type(exc).__name__} {getattr(exc, 'code', '')}); "
+              "using data/raw/OECD_CPI_NZL.csv.", file=sys.stderr)
+        data = _oecd_csv((RAW_DIR / "OECD_CPI_NZL.csv").read_text(encoding="utf-8-sig"))
+    out = []
+    for q in sorted(data)[-quarters:]:
+        n = int(q[-1])
+        out.append({"date": f"{q[:4]}-{QUARTER_END[n]}", "label": f"{q[:4]} Q{n}", "value": round(data[q], 1)})
+    return out
 
 
 def fetch_ocr(max_changes=6):
@@ -183,7 +214,7 @@ def fetch_bond10():
 
 # ---- GDP growth and unemployment: OECD series distributed by FRED (St. Louis Fed) ----
 # Needs a free key from https://fred.stlouisfed.org (set as FRED_API_KEY).
-# Note: FRED's OECD CPI series for NZ stopped in 2023, so CPI is NOT taken from FRED.
+# Note: FRED's NZ CPI series stopped in 2023, so CPI comes straight from the OECD API instead.
 FRED_API = "https://api.stlouisfed.org/fred/series/observations"
 QUARTER_END = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}
 

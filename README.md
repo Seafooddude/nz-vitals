@@ -68,3 +68,8 @@ These two come from the OECD's series on FRED (St. Louis Fed). Add a second repo
 (free key from https://fred.stlouisfed.org > My Account > API Keys). The workflow must pass it to the job (see `update.yml`).
 Without it the script uses `data/raw/NAEXKP01NZQ657S.csv` and `data/raw/LRUNTTTTNZQ156S.csv`.
 FRED's NZ CPI series ended in 2023, so CPI is not connected from there.
+
+## CPI inflation (OECD API, automatic)
+
+CPI is fetched from the OECD's public SDMX API (no key needed) and needs no manual work.
+If the download fails the script uses `data/raw/OECD_CPI_NZL.csv` and prints a WARNING.
