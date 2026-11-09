@@ -129,7 +129,9 @@ INDICATORS = [
     _ind("unemployment", "Unemployment rate", "%", "Quarterly", "OECD via FRED", "https://fred.stlouisfed.org/series/LRUNTTTTNZQ156S", 0, 20),
     _ind("cpi", "Annual CPI inflation", "%", "Quarterly", "OECD", "https://data-explorer.oecd.org/", -5, 20),
     _ind("nontradables", "Non-tradables inflation (annual)", "%", "Quarterly", "Stats NZ", STATS, -5, 15),
-    _ind("houses", "House price growth (annual)", "%", "Monthly", "REINZ", "https://www.reinz.co.nz/", -30, 40),
+    _ind("houses", "House price growth (annual)", "%", "Quarterly", "BIS via FRED", "https://fred.stlouisfed.org/series/QNZN628BIS", -30, 40),
+    _ind("consumer_conf", "Consumer confidence", "index", "Monthly", "OECD", "https://data-explorer.oecd.org/", 80, 120),
+    _ind("business_conf", "Business confidence", "index", "Monthly", "OECD", "https://data-explorer.oecd.org/", 80, 120),
     _ind("ocr", "Official Cash Rate", "%", "Per RBNZ review", RBNZ, "https://www.rbnz.govt.nz/statistics/b2", 0, 10),
     _ind("bond10", "10-year government bond yield", "%", "Daily", RBNZ, "https://www.rbnz.govt.nz/statistics/b2", 0, 12),
     _ind("nzx50", "NZX 50 index", "index", "Daily", "NZX", "https://www.nzx.com/", 1000, 30000),
@@ -265,7 +267,76 @@ def fetch_unemployment():
     return quarterly(fred_points("LRUNTTTTNZQ156S"))
 
 
-FETCHERS = {"cpi": fetch_cpi, "gdp": fetch_gdp, "unemployment": fetch_unemployment,
+def fetch_houses(quarters=12):
+    """Annual % change in the BIS residential property price index for NZ (via FRED), by quarter."""
+    pts = quarterly(fred_points("QNZN628BIS"), quarters=quarters + 4)
+    level = {p["label"]: p for p in pts}
+    out = []
+    for p in pts:
+        y, q = p["label"].split(" Q")
+        prior = level.get(f"{int(y) - 1} Q{q}")
+        if prior:
+            out.append({"date": p["date"], "label": p["label"],
+                        "value": round((p["value"] / prior["value"] - 1) * 100, 1)})
+    return out[-quarters:]
+
+
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+OECD_CONF_URL = ("https://sdmx.oecd.org/public/rest/data/OECD.SDD.STES,DSD_STES@DF_CLI,4.1/"
+                 "NZL.M.BCICP+CCICP......?dimensionAtObservation=AllDimensions&format=csvfilewithlabels")
+_conf_cache = {}
+
+
+def _conf_rows(text):
+    """Parse either the OECD API CSV or the cleaned data/raw copy -> {code: {'2026-09': 102.9}}."""
+    out = {}
+    for r in csv.DictReader(io.StringIO(text)):
+        code = r.get("MEASURE") or r.get("indicator_code")
+        month = r.get("TIME_PERIOD") or r.get("date")
+        value = r.get("OBS_VALUE") or r.get("value")
+        unit = r.get("UNIT_MEASURE") or r.get("unit_code")
+        adj = r.get("ADJUSTMENT")
+        if code not in ("BCICP", "CCICP") or not month or value in (None, "", "NaN"):
+            continue
+        if unit and unit != "IX" or (adj and adj != "AA"):
+            continue
+        if re.fullmatch(r"\d{4}-\d{2}", month):
+            out.setdefault(code, {})[month] = float(value)
+    return out
+
+
+def _confidence():
+    if not _conf_cache:
+        try:
+            rows = _conf_rows(http_get(OECD_CONF_URL, {"User-Agent": "nz-vitals-data-bot/1.0"}).decode("utf-8-sig"))
+            if len(rows.get("BCICP", {})) < 24 or len(rows.get("CCICP", {})) < 24:
+                raise ValueError("too few rows")
+        except Exception as exc:
+            print(f"WARNING: OECD confidence download failed ({type(exc).__name__} {getattr(exc, 'code', '')}); "
+                  "using data/raw/OECD_confidence_NZL.csv.", file=sys.stderr)
+            rows = _conf_rows((RAW_DIR / "OECD_confidence_NZL.csv").read_text(encoding="utf-8-sig"))
+        _conf_cache.update(rows)
+    return _conf_cache
+
+
+def _monthly(data, months=13):
+    out = []
+    for m in sorted(data)[-months:]:
+        y, mo = int(m[:4]), int(m[5:])
+        last = (date(y + (mo == 12), mo % 12 + 1, 1) - date.resolution).day
+        out.append({"date": f"{m}-{last:02d}", "label": f"{MONTHS[mo - 1]} {y}", "value": round(data[m], 1)})
+    return out
+
+
+def fetch_consumer_conf():
+    return _monthly(_confidence()["CCICP"])
+
+
+def fetch_business_conf():
+    return _monthly(_confidence()["BCICP"])
+
+
+FETCHERS = {"cpi": fetch_cpi, "houses": fetch_houses, "consumer_conf": fetch_consumer_conf, "business_conf": fetch_business_conf, "gdp": fetch_gdp, "unemployment": fetch_unemployment,
             "ocr": fetch_ocr, "nzdusd": fetch_nzdusd,
             "twi": fetch_twi, "bond10": fetch_bond10}
 

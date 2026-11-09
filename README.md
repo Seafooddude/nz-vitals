@@ -73,3 +73,8 @@ FRED's NZ CPI series ended in 2023, so CPI is not connected from there.
 
 CPI is fetched from the OECD's public SDMX API (no key needed) and needs no manual work.
 If the download fails the script uses `data/raw/OECD_CPI_NZL.csv` and prints a WARNING.
+
+## Consumer and business confidence (OECD API, automatic)
+
+Fetched from the OECD's public API (dataflow DF_CLI, no key). If it fails the script uses
+`data/raw/OECD_confidence_NZL.csv` and prints a WARNING.
