@@ -8,6 +8,7 @@
   // Display settings per indicator. Add an entry here when you add an indicator.
   var CFG = {
     cpi: { label: "CPI inflation", suffix: "y/y", change: "prev", changeNote: "vs prev. qtr",
+           band: [1, 3], ref: 2, refLabel: "RBNZ target 1–3%",
            tip: "Annual change in the Consumers Price Index, the main measure of inflation in New Zealand." },
     unemployment: { label: "Unemployment", change: "prev", changeNote: "vs prev. qtr",
            tip: "Share of the labour force without a job and actively looking for one." },
@@ -25,9 +26,9 @@
            tip: "Annual change in house prices. Housing is a big part of household wealth and spending in New Zealand." },
     current_account: { label: "Current account", change: "prev", changeNote: "vs prev. qtr",
            tip: "Quarterly balance of New Zealand's trade, investment income and transfers with the world, in NZ$ billion. A deficit means the country is borrowing from abroad to fund spending." },
-    consumer_conf: { label: "Consumer confidence", change: "prev", changeNote: "vs prev. month",
+    consumer_conf: { label: "Consumer confidence", change: "prev", changeNote: "vs prev. month", ref: 100, refLabel: "Long-run average",
            tip: "OECD composite index of how households feel about the economy and their finances. 100 is the long-run average; above 100 is more upbeat than usual." },
-    business_conf: { label: "Business confidence", change: "prev", changeNote: "vs prev. month",
+    business_conf: { label: "Business confidence", change: "prev", changeNote: "vs prev. month", ref: 100, refLabel: "Long-run average",
            tip: "OECD composite index of firms' views on output, orders and the outlook. 100 is the long-run average; above 100 is more upbeat than usual." },
     bond10: { label: "10-year govt bond", change: "ytd", changeNote: "YTD",
            tip: "The interest rate the government pays to borrow for 10 years. It anchors long-term fixed mortgage rates." },
@@ -42,7 +43,7 @@
   // The four question cards. rows: [label, indicator id, metric].
   var QUESTIONS = [
     { title: "Is inflation back within the target band?", link: "cpi",
-      rows: [["Annual CPI inflation", "cpi", "latest"], ["Change from previous quarter", "cpi", "delta"]],
+      rows: [["Annual CPI inflation", "cpi", "latest"], ["Within the 1–3% target band?", "cpi", "inband"], ["Change from previous quarter", "cpi", "delta"]],
       note: "The Reserve Bank aims to keep annual CPI inflation between 1% and 3%, close to 2% over the medium term." },
     { title: "Is the labour market weakening?", link: "unemployment",
       rows: [["Unemployment rate", "unemployment", "latest"], ["Change from previous quarter", "unemployment", "delta"]],
@@ -54,6 +55,19 @@
       rows: [["NZD/USD", "nzdusd", "latest"], ["Change since 31 Dec {y}", "nzdusd", "ytd"], ["12-month range (month-ends)", "nzdusd", "range"]],
       note: "A weaker NZ dollar makes imports dearer and tends to lift inflation. A stronger one does the opposite." }
   ];
+
+  // Trend charts are shown in these groups, in this order. Indicators not listed land in "More".
+  var GROUPS = [
+    { id: "growth", title: "Growth and jobs", ids: ["gdp", "unemployment", "wages"] },
+    { id: "prices", title: "Prices", ids: ["cpi", "nontradables", "houses"] },
+    { id: "confidence", title: "Confidence", ids: ["consumer_conf", "business_conf"] },
+    { id: "rates", title: "Interest rates and markets", ids: ["ocr", "bond10", "nzx50"] },
+    { id: "dollar", title: "The NZ dollar and trade", ids: ["nzdusd", "twi", "current_account", "gdt"] }
+  ];
+
+  // Chart time range (years back from the newest point; 0 = everything we hold).
+  var rangeYears = 5;
+  var charts = [];
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -110,6 +124,10 @@
     if (kind === "latest") return fmt(latest(ind).value, ind.unit);
     if (kind === "delta") { d = delta(ind, "prev"); return d ? d.text : "–"; }
     if (kind === "ytd") { d = delta(ind, "ytd"); return d ? d.text : "–"; }
+    if (kind === "inband") {
+      var cv = latest(ind).value;
+      return cv > 3 ? "No: " + (cv - 3).toFixed(1) + " pp above" : cv < 1 ? "No: " + (1 - cv).toFixed(1) + " pp below" : "Yes";
+    }
     if (kind === "lastchange") {
       for (i = s.length - 1; i > 0; i--) if (s[i].value !== s[i - 1].value) return fmtDate(s[i]);
       return "No change in period";
@@ -163,7 +181,8 @@
       if (!ind) return;
       if (ind.placeholder) { sample = true; return; }
       var yr = parseInt(latest(ind).date.slice(0, 4), 10) - 1;
-      html += '<div class="qrow"><span>' + esc(r[0].replace("{y}", yr)) + "</span><b>" + esc(metric(ind, r[2])) + "</b></div>";
+      var dd = r[2] === "delta" ? delta(ind, "prev") : r[2] === "ytd" ? delta(ind, "ytd") : null;
+      html += '<div class="qrow"><span>' + esc(r[0].replace("{y}", yr)) + "</span><b" + (dd ? ' class="chg ' + dd.dir + '"' : "") + ">" + esc(metric(ind, r[2])) + "</b></div>";
     });
     el.innerHTML = "<h3>" + esc(q.title) + (sample ? '<span class="tag">Coming soon</span>' : "") + "</h3>" +
       (sample && !html ? '<p class="soon-text">Not connected to official data yet.</p>' : html) +
@@ -184,18 +203,70 @@
     return el;
   }
 
-  // ---- chart with hover tooltip --------------------------------------------
+  // ---- chart with axes, target band and hover tooltip -------------------------
+
+  // The slice of the series to show for the chosen time range.
+  function windowed(ind, step) {
+    var s = ind.series, out = s;
+    if (rangeYears) {
+      var last = s[s.length - 1].date;
+      var cut = (parseInt(last.slice(0, 4), 10) - rangeYears) + last.slice(4);
+      out = s.filter(function (p) { return p.date >= cut; });
+      // A step series (the OCR) holds its value between decisions, so start the
+      // window with the rate that was in force on the cut-off date.
+      if (step && out.length && out[0].date > cut) {
+        var i = s.indexOf(out[0]);
+        if (i > 0) out.unshift({ date: cut, value: s[i - 1].value });
+      }
+    }
+    return out.length < 2 ? s.slice(-2) : out;
+  }
+
+  function niceTicks(lo, hi, n) {
+    var raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10)), r = raw / mag;
+    var step = (r < 1.5 ? 1 : r < 3 ? 2 : r < 7 ? 5 : 10) * mag, t = [];
+    for (var v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9; v += step) t.push(Math.round(v / step) * step);
+    return { ticks: t, step: step };
+  }
+
+  function tickText(v, unit, step) {
+    var dec = Math.max(0, Math.ceil(-Math.log(step) / Math.LN10 - 1e-9));
+    var n = Math.abs(v) >= 1000 ? Math.round(v).toLocaleString("en-NZ") : v.toFixed(dec);
+    return unit === "%" ? n + "%" : unit === "US$/t" ? "US$" + n : n;
+  }
+
+  // Date ticks for the x axis: whole years for long spans, otherwise evenly spaced months.
+  function xTicks(t0, t1) {
+    var out = [], YR = 365.25 * 864e5;
+    if (t1 - t0 > 2 * YR) {
+      var y0 = new Date(t0).getUTCFullYear() + 1, y1 = new Date(t1).getUTCFullYear();
+      var k = Math.max(1, Math.ceil((y1 - y0 + 1) / 6));
+      for (var y = y0; y <= y1; y += k) out.push({ t: Date.UTC(y, 0, 1), text: String(y) });
+    } else {
+      for (var i = 0; i <= 4; i++) {
+        var t = t0 + (t1 - t0) * i / 4, d = new Date(t);
+        out.push({ t: t, text: MON[d.getUTCMonth()] + " " + String(d.getUTCFullYear()).slice(2) });
+      }
+    }
+    return out;
+  }
 
   function drawChart(host, ind) {
-    var s = ind.series, step = (CFG[ind.id] || {}).step;
-    var W = Math.max(host.clientWidth, 220), H = 150, L = 10, R = 10, T = 16, B = 24;
+    var cfg = CFG[ind.id] || {}, step = cfg.step;
+    var s = windowed(ind, step);
+    var W = Math.max(host.clientWidth, 220), H = 200, L = 40, R = 12, T = 14, B = 26;
     var t = s.map(function (p) { return Date.parse(p.date); });
     var span = (t[t.length - 1] - t[0]) || 1;
     var vals = s.map(function (p) { return p.value; });
-    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals), pad = (hi - lo) * 0.15 || 1;
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    if (cfg.band) { lo = Math.min(lo, cfg.band[0]); hi = Math.max(hi, cfg.band[1]); }
+    if (cfg.ref != null) { lo = Math.min(lo, cfg.ref); hi = Math.max(hi, cfg.ref); }
+    var pad = (hi - lo) * 0.12 || 1;
     lo -= pad; hi += pad;
-    var xs = t.map(function (v) { return L + (v - t[0]) / span * (W - L - R); });
-    var ys = vals.map(function (v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); });
+    var nt = niceTicks(lo, hi, 4);
+    var X = function (v) { return L + (v - t[0]) / span * (W - L - R); };
+    var Y = function (v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); };
+    var xs = t.map(X), ys = vals.map(Y);
 
     // Rates like the OCR hold until the next decision, so draw them as steps.
     var d = "M" + xs[0].toFixed(1) + " " + ys[0].toFixed(1);
@@ -205,20 +276,43 @@
     }
     var dots = xs.map(function (x, k) {
       var last = k === xs.length - 1;
+      if (!last && s.length > 24) return "";
       return '<circle class="dot' + (last ? " last" : "") + '" cx="' + x.toFixed(1) + '" cy="' + ys[k].toFixed(1) + '" r="' + (last ? 4 : 2.5) + '"/>';
+    }).join("");
+
+    var grid = nt.ticks.map(function (v) {
+      var y = Y(v).toFixed(1);
+      return '<line class="gl" x1="' + L + '" x2="' + (W - R) + '" y1="' + y + '" y2="' + y + '"/>' +
+             '<text class="yt" x="' + (L - 6) + '" y="' + (Number(y) + 3.5) + '" text-anchor="end">' + esc(tickText(v, ind.unit, nt.step)) + "</text>";
+    }).join("");
+    // Zero line for series that cross zero (growth rates, balances).
+    var zero = lo < 0 && hi > 0 ? '<line class="zero" x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(0).toFixed(1) + '" y2="' + Y(0).toFixed(1) + '"/>' : "";
+    var band = "", ref = "";
+    if (cfg.band) {
+      band = '<rect class="band" x="' + L + '" width="' + (W - L - R) + '" y="' + Y(cfg.band[1]).toFixed(1) + '" height="' + (Y(cfg.band[0]) - Y(cfg.band[1])).toFixed(1) + '"/>';
+    }
+    if (cfg.ref != null) {
+      var ry = Y(cfg.ref);
+      ref = '<line class="ref" x1="' + L + '" x2="' + (W - R) + '" y1="' + ry.toFixed(1) + '" y2="' + ry.toFixed(1) + '"/>' +
+            (cfg.refLabel ? '<text class="reft" x="' + (W - R - 4) + '" y="' + (cfg.band ? Y(cfg.band[0]) + 12 : ry - 4).toFixed(1) + '" text-anchor="end">' + esc(cfg.refLabel) + "</text>" : "");
+    }
+    var xt = xTicks(t[0], t[t.length - 1]).map(function (k) {
+      var x = X(k.t), a = x < L + 16 ? "start" : x > W - R - 16 ? "end" : "middle";
+      return '<line class="tick" x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + (H - B) + '" y2="' + (H - B + 4) + '"/>' +
+             '<text x="' + x.toFixed(1) + '" y="' + (H - 7) + '" text-anchor="' + a + '">' + esc(k.text) + "</text>";
     }).join("");
 
     host.innerHTML =
       '<svg class="chart" viewBox="0 0 ' + W + " " + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="' + esc(ind.name) + " trend chart. " + esc(caption(ind)) + ' Use the arrow keys to read each value.">' +
-      '<line class="axis" x1="' + L + '" y1="' + (H - B) + '" x2="' + (W - R) + '" y2="' + (H - B) + '"/>' +
+      grid + band + zero + ref +
+      '<line class="axis" x1="' + L + '" y1="' + (H - B) + '" x2="' + (W - R) + '" y2="' + (H - B) + '"/>' + xt +
       '<path class="line" d="' + d + '"/>' + dots +
       '<line class="hline" y1="' + T + '" y2="' + (H - B) + '" visibility="hidden"/>' +
       '<circle class="hdot" r="5" visibility="hidden"/>' +
-      '<text x="' + L + '" y="' + (H - 6) + '">' + esc(fmtDate(s[0])) + "</text>" +
-      '<text x="' + (W - R) + '" y="' + (H - 6) + '" text-anchor="end">' + esc(fmtDate(s[s.length - 1])) + "</text>" +
       '</svg><div class="tip" role="status"></div>';
 
     var svg = host.querySelector("svg"), hl = svg.querySelector(".hline"), hd = svg.querySelector(".hdot"), tip = host.querySelector(".tip");
+    var cur = s.length - 1;
 
     function move(e) {
       var r = svg.getBoundingClientRect(), mx = (e.clientX - r.left) * (W / r.width), k = 0, best = Infinity;
@@ -242,35 +336,37 @@
     svg.addEventListener("pointerdown", move);
     svg.addEventListener("pointerleave", hide);
     // Keyboard: Tab to the chart, then use the arrow keys to step through the points.
-    var cur = s.length - 1;
     svg.setAttribute("tabindex", "0");
     svg.addEventListener("focus", function () { show(cur); });
     svg.addEventListener("blur", hide);
     svg.addEventListener("keydown", function (e) {
-      var step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 :
-                 e.key === "Home" ? -s.length : e.key === "End" ? s.length : 0;
-      if (!step) return;
+      var st = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 :
+               e.key === "Home" ? -s.length : e.key === "End" ? s.length : 0;
+      if (!st) return;
       e.preventDefault();
-      show(Math.max(0, Math.min(s.length - 1, cur + step)));
+      show(Math.max(0, Math.min(s.length - 1, cur + st)));
     });
   }
 
-  // Draw now and redraw whenever the card changes width (rotation, resize).
+  // Draw now and redraw whenever the card changes width (rotation, resize) or the range changes.
   function mountChart(host, ind) {
     var lastW = 0;
-    function render() {
+    function render(force) {
       var w = host.clientWidth;
-      if (!w || w === lastW) return;
+      if (!w || (w === lastW && force !== true)) return;
       lastW = w;
       drawChart(host, ind);
     }
-    if (window.ResizeObserver) new ResizeObserver(render).observe(host);
-    else { render(); window.addEventListener("resize", render); }
+    if (window.ResizeObserver) new ResizeObserver(function () { render(); }).observe(host);
+    else { render(true); window.addEventListener("resize", function () { render(); }); }
+    charts.push(function () { render(true); });
   }
 
-  // ---- earnings by region ---------------------------------------------------
+  // ---- earnings by region (map + bars) ----------------------------------------
 
-  function renderRegions(r, host) {
+  var RAMP = ["#dbe9f5", "#a9cbe6", "#6aa6d3", "#2e80bd", "#0a4f86"];
+
+  function renderRegions(r, host, geo) {
     if (!r) {
       host.innerHTML = '<p class="soon-text">Not connected to official data yet.</p>';
       return;
@@ -289,30 +385,79 @@
       var key = mode === "hourly" ? "median_hourly" : "median_weekly";
       var unit = mode === "hourly" ? " per hour" : " per week";
       var rows = r.items.slice().sort(function (a, b) { return b[key] - a[key]; });
-      var max = Math.max.apply(null, rows.map(function (i) { return i[key]; }).concat(r.national[key])) * 1.08;
+      var vals = rows.map(function (i) { return i[key]; });
+      var vmin = Math.min.apply(null, vals), vmax = Math.max.apply(null, vals);
+      var max = Math.max(vmax, r.national[key]) * 1.08;
       var nat = r.national[key] / max * 100;
+      var shade = function (v) { return RAMP[Math.min(RAMP.length - 1, Math.floor((v - vmin) / ((vmax - vmin) || 1) * RAMP.length))]; };
+      var tipText = function (i) {
+        var ch = change(i[key], i["prev_" + key]);
+        return "<span>" + esc(i.name) + " · " + esc(r.periodLabel) + "</span><strong>" + esc(money(i[key], mode) + unit) + "</strong>" +
+               "<span>" + esc((ch ? ch + " · " : "") + Math.round(i.people * 1000).toLocaleString("en-NZ") + " people") + "</span>";
+      };
+
+      var map = "";
+      if (geo) {
+        var byName = {};
+        rows.forEach(function (i) { byName[i.name] = i; });
+        map = '<div class="rmap"><svg viewBox="0 0 ' + geo.width + " " + geo.height + '" role="group" aria-label="Map of median ' + mode + ' earnings by region">' +
+          Object.keys(geo.regions).filter(function (n) { return byName[n]; }).map(function (n) {
+            var i = byName[n];
+            return '<path class="rpath" data-r="' + esc(n) + '" d="' + geo.regions[n] + '" fill="' + shade(i[key]) + '" tabindex="0" role="img" aria-label="' +
+              esc(n + ": " + money(i[key], mode) + unit) + '"/>';
+          }).join("") + '</svg><div class="maptip" role="tooltip"></div>' +
+          '<div class="rlegend"><span>' + esc(money(vmin, mode)) + '</span><span class="ramp">' +
+          RAMP.map(function (c) { return '<i style="background:' + c + '"></i>'; }).join("") + '</span><span>' + esc(money(vmax, mode)) + "</span></div></div>";
+      }
 
       host.innerHTML =
         '<div class="seg" role="group" aria-label="Earnings measure">' +
           ["hourly", "weekly"].map(function (m) {
             return '<button type="button" data-m="' + m + '" aria-pressed="' + (m === mode) + '">Median ' + m + "</button>";
           }).join("") + "</div>" +
+        '<div class="rwrap' + (geo ? " withmap" : "") + '">' + map +
         '<div class="rlist">' + rows.map(function (i) {
-          var ch = change(i[key], i["prev_" + key]);
-          return '<div class="rrow" tabindex="0">' +
+          return '<div class="rrow" tabindex="0" data-r="' + esc(i.name) + '">' +
             '<span class="rname">' + esc(i.name) + "</span>" +
             '<span class="rtrack"><span class="rbar" style="width:' + (i[key] / max * 100).toFixed(1) + '%"></span>' +
               '<span class="rnat" style="left:' + nat.toFixed(1) + '%"></span></span>' +
             '<span class="rval">' + esc(money(i[key], mode)) + "</span>" +
-            '<div class="rtip" role="tooltip"><span>' + esc(i.name) + " · " + esc(r.periodLabel) + "</span>" +
-              "<strong>" + esc(money(i[key], mode) + unit) + "</strong>" +
-              "<span>" + esc((ch ? ch + " · " : "") + Math.round(i.people * 1000).toLocaleString("en-NZ") + " people") + "</span></div>" +
+            '<div class="rtip" role="tooltip">' + tipText(i) + "</div>" +
             "</div>";
-        }).join("") + "</div>" +
+        }).join("") + "</div></div>" +
         '<p class="rnote">Median ' + mode + " earnings of people in paid employment, " + esc(r.periodLabel) +
           ". Dashed line: New Zealand overall (" + esc(money(r.national[key], mode)) + "). Source: " +
           '<a href="' + esc(r.url) + '">Stats NZ</a>. Survey estimates, so smaller regions can move around from year to year. ' +
           "Earnings from paid employment only: benefits and investment income are not included.</p>";
+
+      // Hovering or focusing a region on the map or in the list highlights both.
+      var mapEl = host.querySelector(".rmap"), mtip = host.querySelector(".maptip");
+      function light(name) {
+        [].forEach.call(host.querySelectorAll("[data-r]"), function (el) {
+          el.classList.toggle("on", name !== null && el.getAttribute("data-r") === name);
+        });
+      }
+      function place(name, x, y) {
+        if (!mtip) return;
+        var it = byName && byName[name];
+        if (!it) { mtip.className = "maptip"; return; }
+        var b = mapEl.getBoundingClientRect();
+        mtip.innerHTML = tipText(it);
+        mtip.style.left = Math.min(Math.max(x - b.left, 90), b.width - 90) + "px";
+        mtip.style.top = (y - b.top - 12) + "px";
+        mtip.className = "maptip on";
+      }
+      host.querySelectorAll("[data-r]").forEach(function (el) {
+        var name = el.getAttribute("data-r"), isPath = el.classList.contains("rpath");
+        el.addEventListener("pointerenter", function (e) { light(name); if (isPath) place(name, e.clientX, e.clientY); });
+        el.addEventListener("pointermove", function (e) { if (isPath) place(name, e.clientX, e.clientY); });
+        el.addEventListener("pointerleave", function () { light(null); if (mtip) mtip.className = "maptip"; });
+        el.addEventListener("focus", function () {
+          light(name);
+          if (isPath) { var b = el.getBoundingClientRect(); place(name, b.left + b.width / 2, b.top + b.height / 2); }
+        });
+        el.addEventListener("blur", function () { light(null); if (mtip) mtip.className = "maptip"; });
+      });
     }
 
     host.addEventListener("click", function (e) {
@@ -326,26 +471,68 @@
     draw();
   }
 
+  // ---- trend sections -----------------------------------------------------------
+
+  function renderTrends(data) {
+    var by = {}, used = {}, grid = $("grid");
+    data.indicators.forEach(function (ind) { by[ind.id] = ind; });
+    var groups = GROUPS.map(function (g) {
+      return { id: g.id, title: g.title, inds: g.ids.filter(function (id) { return by[id]; }).map(function (id) { used[id] = 1; return by[id]; }) };
+    });
+    var rest = data.indicators.filter(function (i) { return !used[i.id]; });
+    if (rest.length) groups.push({ id: "more", title: "More", inds: rest });
+    groups = groups.filter(function (g) { return g.inds.length; });
+
+    $("jump").innerHTML = groups.map(function (g) { return '<a href="#g-' + g.id + '">' + esc(g.title) + "</a>"; }).join("");
+    groups.forEach(function (g) {
+      var sec = document.createElement("section");
+      sec.className = "tgroup";
+      sec.id = "g-" + g.id;
+      sec.innerHTML = '<h3 class="group-title">' + esc(g.title) + '</h3><div class="grid"></div>';
+      var gg = sec.querySelector(".grid");
+      g.inds.forEach(function (ind) {
+        var card = trendCard(ind);
+        gg.appendChild(card);
+        var host = card.querySelector(".chart-host");
+        if (host) mountChart(host, ind);
+      });
+      grid.appendChild(sec);
+    });
+  }
+
+  function setupRange() {
+    var box = $("range");
+    box.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-y]");
+      if (!b) return;
+      rangeYears = parseInt(b.getAttribute("data-y"), 10);
+      [].forEach.call(box.querySelectorAll("button"), function (x) {
+        x.setAttribute("aria-pressed", String(x === b));
+      });
+      charts.forEach(function (f) { f(); });
+    });
+  }
+
   // ---- start ----------------------------------------------------------------
 
-  fetch("data/data.json", { cache: "no-cache" })
-    .then(function (r) {
+  setupRange();
+  Promise.all([
+    fetch("data/data.json", { cache: "no-cache" }).then(function (r) {
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
-    })
-    .then(function (data) {
+    }),
+    // The map is optional: if it fails to load, the bars still show.
+    fetch("data/nz-regions.json").then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+  ])
+    .then(function (res) {
+      var data = res[0], geo = res[1];
       var by = {};
       data.indicators.forEach(function (ind) { by[ind.id] = ind; });
 
       data.indicators.forEach(function (ind) { $("tiles").appendChild(tile(ind)); });
       QUESTIONS.forEach(function (q) { $("qgrid").appendChild(question(q, by)); });
-      renderRegions(data.regions, $("regions-body"));
-      data.indicators.forEach(function (ind) {
-        var card = trendCard(ind);
-        $("grid").appendChild(card);
-        var host = card.querySelector(".chart-host");
-        if (host) mountChart(host, ind);
-      });
+      renderRegions(data.regions, $("regions-body"), geo);
+      renderTrends(data);
 
       // "As of" = the date of the newest real (non-placeholder) observation.
       var real = data.indicators.filter(function (i) { return !i.placeholder; })

@@ -113,6 +113,10 @@ def rbnz_points(url, env_var, series_id):
     return points
 
 
+# How much history to keep. The charts have a 1Y / 5Y / Max switch, so keep about ten years.
+HIST_Q = 40    # quarters
+HIST_M = 120   # months
+
 STATS = "https://www.stats.govt.nz/"
 RBNZ = "Reserve Bank of New Zealand"
 
@@ -156,7 +160,7 @@ def _oecd_csv(text):
     return out
 
 
-def fetch_cpi(quarters=12):
+def fetch_cpi(quarters=HIST_Q):
     """Annual CPI inflation (growth over 1 year) for New Zealand from the OECD's SDMX API (no key).
 
     Falls back to data/raw/OECD_CPI_NZL.csv if the download fails or looks wrong.
@@ -177,7 +181,7 @@ def fetch_cpi(quarters=12):
     return out
 
 
-def fetch_ocr(max_changes=6):
+def fetch_ocr(max_changes=60):
     """OCR as a short series: each of the last few changes, plus the latest day.
 
     The RBNZ file is daily, but the OCR only moves a handful of times a year,
@@ -192,7 +196,7 @@ def fetch_ocr(max_changes=6):
     return [{"date": d.date().isoformat(), "value": v} for d, v in chosen]
 
 
-def month_ends(points, months=12):
+def month_ends(points, months=HIST_M):
     """Last observation of each of the last `months` months, plus the latest day."""
     last_of_month = {}
     for d, v in points:
@@ -251,7 +255,7 @@ def fred_points(series_id):
     return _fred_csv((RAW_DIR / f"{series_id}.csv").read_text(encoding="utf-8-sig"))
 
 
-def quarterly(points, quarters=12):
+def quarterly(points, quarters=HIST_Q):
     """Last N quarters. FRED dates are quarter starts; we store quarter ends plus a label."""
     out = []
     for d, v in points[-quarters:]:
@@ -268,7 +272,7 @@ def fetch_unemployment():
     return quarterly(fred_points("LRUNTTTTNZQ156S"))
 
 
-def fetch_houses(quarters=12):
+def fetch_houses(quarters=HIST_Q):
     """Annual % change in the BIS residential property price index for NZ (via FRED), by quarter."""
     pts = quarterly(fred_points("QNZN628BIS"), quarters=quarters + 4)
     level = {p["label"]: p for p in pts}
@@ -320,7 +324,7 @@ def _confidence():
     return _conf_cache
 
 
-def _monthly(data, months=13):
+def _monthly(data, months=HIST_M):
     out = []
     for m in sorted(data)[-months:]:
         y, mo = int(m[:4]), int(m[5:])
@@ -338,10 +342,10 @@ def fetch_business_conf():
 
 
 OECD_CA_URL = ("https://sdmx.oecd.org/public/rest/data/OECD.SDD.TPS,DSD_BOP@DF_BOP,1.0/"
-               "NZL..CA...Q.XDC.Y?startPeriod=2020-Q1&dimensionAtObservation=AllDimensions&format=csvfilewithlabels")
+               "NZL..CA...Q.XDC.Y?startPeriod=2015-Q1&dimensionAtObservation=AllDimensions&format=csvfilewithlabels")
 
 
-def fetch_current_account(quarters=12):
+def fetch_current_account(quarters=HIST_Q):
     """Quarterly current account balance in NZ$ billion (seasonally adjusted), from the OECD API (no key).
 
     The query returns credits, debits and the balance; only the balance row is used. If it cannot

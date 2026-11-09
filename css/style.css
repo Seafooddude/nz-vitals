@@ -55,9 +55,14 @@ a:focus-visible { outline: 3px solid var(--black); outline-offset: 2px; }
 .tile-value { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.2; margin-top: 4px; }
 .tile-value small { font-size: 0.8rem; font-weight: 400; color: var(--grey); letter-spacing: 0; }
 .tile-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; font-size: 0.75rem; color: var(--grey); }
-.chg { font-weight: 700; color: var(--blue); white-space: nowrap; }
-.chg.down { color: var(--black); }
-.chg.flat { color: var(--grey); }
+/* Changes: green up, red down (the direction, not a judgement of good or bad) */
+:root { --up: #1a7f37; --down: #c62828; }
+.chg { font-weight: 700; color: var(--grey); white-space: nowrap; }
+.chg.up { color: var(--up); }
+.chg.down { color: var(--down); }
+.chg.up::before, .chg.down::before { font-size: 0.7em; margin-right: 0.3em; vertical-align: 0.08em; }
+.chg.up::before { content: "\25B2"; }
+.chg.down::before { content: "\25BC"; }
 .tile .tag { margin: 6px 0 0; }
 
 /* Question cards */
@@ -70,15 +75,28 @@ a:focus-visible { outline: 3px solid var(--black); outline-offset: 2px; }
 .qlink { font-size: 0.9rem; text-decoration: none; }
 
 /* Trend cards and charts */
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 16px; margin-bottom: 48px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 16px; }
+.trend-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 14px; }
+.trend-bar .hint, .trend-bar .seg { margin: 0; }
+.jump { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-bottom: 8px; font-size: 0.9rem; }
+.jump a { text-decoration: none; }
+.tgroup { margin-bottom: 8px; scroll-margin-top: 16px; }
+.group-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--grey); margin: 28px 0 10px; font-weight: 700; }
+#grid { margin-bottom: 48px; }
 .card { border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; scroll-margin-top: 16px; }
 .card h2 { margin: 0 0 10px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
 .summary { font-size: 0.9rem; margin: 10px 0 8px; }
 .source { font-size: 0.75rem; color: var(--grey); margin: 0; }
 
-.chart-host { position: relative; min-height: 150px; }
+.chart-host { position: relative; min-height: 200px; }
 .chart { display: block; max-width: 100%; height: auto; touch-action: pan-y; cursor: crosshair; }
-.chart .axis { stroke: var(--line); stroke-width: 1; }
+.chart .axis { stroke: #b5b5b5; stroke-width: 1; }
+.chart .tick { stroke: #b5b5b5; stroke-width: 1; }
+.chart .gl { stroke: #ececec; stroke-width: 1; }
+.chart .zero { stroke: #8a8a8a; stroke-width: 1; }
+.chart .band { fill: #e3eef8; }
+.chart .ref { stroke: var(--blue); stroke-opacity: 0.55; stroke-width: 1; stroke-dasharray: 4 3; }
+.chart .reft { fill: var(--blue); font-size: 10px; }
 .chart .line { fill: none; stroke: var(--blue); stroke-width: 2; stroke-linejoin: round; }
 .chart .dot { fill: var(--white); stroke: var(--blue); stroke-width: 1.5; }
 .chart .dot.last { fill: var(--blue); }
@@ -97,7 +115,6 @@ a:focus-visible { outline: 3px solid var(--black); outline-offset: 2px; }
 .soon-text { color: var(--grey); font-size: 0.9rem; margin: 16px 0; }
 .notice.warn { border-color: var(--black); color: var(--black); }
 .chart:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-.intro { margin: 20px 0 0; max-width: 760px; color: var(--grey); }
 .prose h3 { font-size: 0.95rem; margin: 24px 0 4px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--grey); }
 
 /* Earnings by region */
@@ -106,7 +123,23 @@ a:focus-visible { outline: 3px solid var(--black); outline-offset: 2px; }
 .seg button + button { border-left: 1px solid var(--black); }
 .seg button[aria-pressed="true"] { background: var(--blue); color: var(--white); }
 .seg button:focus-visible { outline: 3px solid var(--black); outline-offset: -3px; }
+.rwrap { display: block; }
+.rwrap.withmap { display: grid; grid-template-columns: minmax(200px, 300px) 1fr; gap: 8px 28px; align-items: start; }
+.rmap { position: relative; max-width: 300px; }
+.rmap svg { display: block; width: 100%; height: auto; }
+.rpath { stroke: #fff; stroke-width: 1; stroke-linejoin: round; cursor: pointer; outline: none; transition: opacity 0.1s; }
+.rpath.on { stroke: var(--black); stroke-width: 2; }
+.rpath:focus-visible { stroke: var(--black); stroke-width: 2.5; }
+.rmap:has(.rpath.on) .rpath:not(.on) { opacity: 0.55; }
+.maptip { display: none; position: absolute; pointer-events: none; background: var(--black); color: var(--white); font-size: 0.75rem; line-height: 1.35; padding: 6px 10px; border-radius: 5px; white-space: nowrap; transform: translate(-50%, -100%); z-index: 3; }
+.maptip.on { display: block; }
+.maptip span, .maptip strong { display: block; }
+.maptip span { opacity: 0.75; }
+.rlegend { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; font-size: 0.75rem; color: var(--grey); }
+.ramp { display: inline-flex; }
+.ramp i { display: block; width: 26px; height: 10px; }
 .rlist { display: grid; gap: 2px; }
+.rrow.on { background: #f2f7fb; }
 .rrow { position: relative; display: grid; grid-template-columns: minmax(120px, 230px) 1fr 64px; align-items: center; gap: 12px; padding: 5px 6px; border-radius: 6px; }
 .rrow:hover, .rrow:focus { background: #f2f7fb; outline: none; }
 .rrow:focus-visible { outline: 2px solid var(--blue); }
@@ -120,6 +153,10 @@ a:focus-visible { outline: 3px solid var(--black); outline-offset: 2px; }
 .rtip span { opacity: 0.75; }
 .rrow:hover .rtip, .rrow:focus .rtip { display: block; }
 .rnote { font-size: 0.8rem; color: var(--grey); margin: 14px 0 0; max-width: 760px; }
+@media (max-width: 760px) {
+  .rwrap.withmap { grid-template-columns: 1fr; }
+  .rmap { max-width: 240px; margin: 0 auto 8px; }
+}
 @media (max-width: 600px) {
   .rrow { grid-template-columns: 1fr 60px; row-gap: 4px; }
   .rname { grid-column: 1 / -1; }
