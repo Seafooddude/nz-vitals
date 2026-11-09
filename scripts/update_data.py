@@ -132,6 +132,7 @@ INDICATORS = [
     _ind("houses", "House price growth (annual)", "%", "Quarterly", "BIS via FRED", "https://fred.stlouisfed.org/series/QNZN628BIS", -30, 40),
     _ind("consumer_conf", "Consumer confidence", "index", "Monthly", "OECD", "https://data-explorer.oecd.org/", 80, 120),
     _ind("business_conf", "Business confidence", "index", "Monthly", "OECD", "https://data-explorer.oecd.org/", 80, 120),
+    _ind("current_account", "Current account balance", "NZ$bn", "Quarterly", "OECD", "https://data-explorer.oecd.org/", -15, 10),
     _ind("ocr", "Official Cash Rate", "%", "Per RBNZ review", RBNZ, "https://www.rbnz.govt.nz/statistics/b2", 0, 10),
     _ind("bond10", "10-year government bond yield", "%", "Daily", RBNZ, "https://www.rbnz.govt.nz/statistics/b2", 0, 12),
     _ind("nzx50", "NZX 50 index", "index", "Daily", "NZX", "https://www.nzx.com/", 1000, 30000),
@@ -336,7 +337,32 @@ def fetch_business_conf():
     return _monthly(_confidence()["BCICP"])
 
 
-FETCHERS = {"cpi": fetch_cpi, "houses": fetch_houses, "consumer_conf": fetch_consumer_conf, "business_conf": fetch_business_conf, "gdp": fetch_gdp, "unemployment": fetch_unemployment,
+OECD_CA_URL = ("https://sdmx.oecd.org/public/rest/data/OECD.SDD.TPS,DSD_BOP@DF_BOP,1.0/"
+               "NZL..CA...Q.XDC.Y?startPeriod=2020-Q1&dimensionAtObservation=AllDimensions&format=csvfilewithlabels")
+
+
+def fetch_current_account(quarters=12):
+    """Quarterly current account balance in NZ$ billion (seasonally adjusted), from the OECD API (no key).
+
+    The query returns credits, debits and the balance; only the balance row is used. If it cannot
+    be identified the error lists the accounting entries found, so the Actions log shows what to fix.
+    """
+    rows = list(csv.DictReader(io.StringIO(
+        http_get(OECD_CA_URL, {"User-Agent": "nz-vitals-data-bot/1.0"}).decode("utf-8-sig"))))
+    entries = {r.get("ACCOUNTING_ENTRY", "") + " = " + r.get("Accounting entry", "") for r in rows}
+    bal = [r for r in rows if r.get("ACCOUNTING_ENTRY") == "B" or "balance" in r.get("Accounting entry", "").lower()]
+    if not bal:
+        raise ValueError("no balance rows; accounting entries returned: " + "; ".join(sorted(entries)))
+    out = {}
+    for r in bal:
+        q, v = r.get("TIME_PERIOD", ""), r.get("OBS_VALUE", "")
+        if re.fullmatch(r"\d{4}-Q[1-4]", q) and v not in ("", "NaN"):
+            out[q] = float(v) * 10 ** int(r.get("UNIT_MULT") or 0) / 1e9  # to NZ$ billion
+    return [{"date": f"{q[:4]}-{QUARTER_END[int(q[-1])]}", "label": f"{q[:4]} Q{q[-1]}", "value": round(out[q], 2)}
+            for q in sorted(out)[-quarters:]]
+
+
+FETCHERS = {"cpi": fetch_cpi, "houses": fetch_houses, "current_account": fetch_current_account, "consumer_conf": fetch_consumer_conf, "business_conf": fetch_business_conf, "gdp": fetch_gdp, "unemployment": fetch_unemployment,
             "ocr": fetch_ocr, "nzdusd": fetch_nzdusd,
             "twi": fetch_twi, "bond10": fetch_bond10}
 

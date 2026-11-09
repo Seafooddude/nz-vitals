@@ -78,3 +78,8 @@ If the download fails the script uses `data/raw/OECD_CPI_NZL.csv` and prints a W
 
 Fetched from the OECD's public API (dataflow DF_CLI, no key). If it fails the script uses
 `data/raw/OECD_confidence_NZL.csv` and prints a WARNING.
+
+## Current account (OECD API, automatic, no fallback file)
+
+Fetched from the OECD balance of payments dataflow (no key). If the download fails the tile keeps its last good data;
+the Actions log lists what went wrong.

@@ -23,6 +23,8 @@
            tip: "Annual inflation in goods and services not traded internationally (rents, rates, insurance, services). It is generated at home, so the RBNZ watches it closely." },
     houses: { label: "House prices", suffix: "y/y", change: "prev", changeNote: "vs prev. qtr",
            tip: "Annual change in house prices. Housing is a big part of household wealth and spending in New Zealand." },
+    current_account: { label: "Current account", change: "prev", changeNote: "vs prev. qtr",
+           tip: "Quarterly balance of New Zealand's trade, investment income and transfers with the world, in NZ$ billion. A deficit means the country is borrowing from abroad to fund spending." },
     consumer_conf: { label: "Consumer confidence", change: "prev", changeNote: "vs prev. month",
            tip: "OECD composite index of how households feel about the economy and their finances. 100 is the long-run average; above 100 is more upbeat than usual." },
     business_conf: { label: "Business confidence", change: "prev", changeNote: "vs prev. month",
