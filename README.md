@@ -9,7 +9,8 @@ index.html            dashboard page
 about.html            methodology (write your own indicator notes here)
 css/style.css         all styling (Helvetica, white / black / Knicks blue)
 js/app.js             renders cards + SVG charts from data/data.json
-data/data.json        the only data file the site reads
+data/data.json        the main data file the site reads
+data/nz-regions.json  simplified outlines of the 12 regions, for the earnings map (from Natural Earth, public domain)
 data/raw/             fallback copies of the source files (RBNZ spreadsheets + Stats NZ earnings CSV)
 favicon.svg, og-image.png, sitemap.xml, robots.txt, _headers   site extras
 scripts/update_data.py  fetch + validate + write data.json (fetchers are stubs)
@@ -83,3 +84,14 @@ Fetched from the OECD's public API (dataflow DF_CLI, no key). If it fails the sc
 
 Fetched from the OECD balance of payments dataflow (no key). If the download fails the tile keeps its last good data;
 the Actions log lists what went wrong.
+
+## Chart history and the 1Y / 5Y / Max switch
+
+`HIST_Q` (quarters) and `HIST_M` (months) near the top of `scripts/update_data.py` set how much history is kept (40 quarters,
+120 months, about ten years). The RBNZ spreadsheets in `data/raw/` only go back to 2018, so the OCR, bond and exchange-rate
+charts start there. Target bands and reference lines (CPI 1-3%, confidence 100) are set per indicator in `CFG` in `js/app.js`.
+
+## Regional map
+
+The map outlines come from Natural Earth admin-1 boundaries, merged into the same 12 regions Stats NZ uses and simplified to
+about 20 KB. Region names in `data/nz-regions.json` must match the names in `REGION_NAMES` in `scripts/update_data.py`.

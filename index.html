@@ -47,7 +47,6 @@
   </header>
 
   <main id="main" class="wrap">
-    <p class="intro">NZ Vitals is a one-page dashboard of the New Zealand economy. It tracks the Official Cash Rate, the NZ dollar and the 10-year government bond yield from the Reserve Bank of New Zealand, GDP growth and unemployment from the OECD (via FRED), CPI inflation from the OECD, house prices from the BIS (via FRED), and earnings by region from Stats NZ, with wages and other measures coming soon.</p>
     <p id="status" class="status">Loading data…</p>
     <div id="notice" class="notice" hidden>
       Draft site: greyed-out items marked "Coming soon" are not connected to official data yet.
@@ -66,14 +65,22 @@
 
     <section id="regions">
       <h2 class="section-title">Earnings by Region</h2>
-      <p class="hint">Hover over (or tap, or tab to) a region to see the details.</p>
+      <p class="hint">Hover over (or tap, or tab to) a region on the map or in the list to see the details.</p>
       <div id="regions-body"></div>
     </section>
 
     <section id="trends">
       <h2 class="section-title">Trends</h2>
-      <p class="hint">Hover over (or tap) a chart to see the values.</p>
-      <div id="grid" class="grid"></div>
+      <div class="trend-bar">
+        <p class="hint">Hover over (or tap) a chart to see the values.</p>
+        <div class="seg" id="range" role="group" aria-label="Chart time range">
+          <button type="button" data-y="1" aria-pressed="false">1Y</button>
+          <button type="button" data-y="5" aria-pressed="true">5Y</button>
+          <button type="button" data-y="0" aria-pressed="false">Max</button>
+        </div>
+      </div>
+      <nav id="jump" class="jump" aria-label="Chart groups"></nav>
+      <div id="grid"></div>
     </section>
 
     <noscript><p class="status">This dashboard needs JavaScript to draw its charts. Data sources: Stats NZ and the Reserve Bank of New Zealand.</p></noscript>
