@@ -124,9 +124,9 @@ def _ind(id, name, unit, freq, source, url, lo, hi):
 
 # Order here = order of the tiles on the page. Only the series is fetched.
 INDICATORS = [
-    _ind("gdp", "Real GDP growth (q/q)", "%", "Quarterly", "Stats NZ", STATS, -5, 5),
+    _ind("gdp", "Real GDP growth (q/q)", "%", "Quarterly", "OECD via FRED", "https://fred.stlouisfed.org/series/NAEXKP01NZQ657S", -15, 15),
     _ind("wages", "Wage growth (annual)", "%", "Quarterly", "Stats NZ", STATS, -2, 10),
-    _ind("unemployment", "Unemployment rate", "%", "Quarterly", "Stats NZ", STATS, 0, 20),
+    _ind("unemployment", "Unemployment rate", "%", "Quarterly", "OECD via FRED", "https://fred.stlouisfed.org/series/LRUNTTTTNZQ156S", 0, 20),
     _ind("cpi", "Annual CPI inflation", "%", "Quarterly", "Stats NZ", STATS, -5, 20),
     _ind("nontradables", "Non-tradables inflation (annual)", "%", "Quarterly", "Stats NZ", STATS, -5, 15),
     _ind("houses", "House price growth (annual)", "%", "Monthly", "REINZ", "https://www.reinz.co.nz/", -30, 40),
@@ -141,10 +141,6 @@ INDICATORS = [
 
 def fetch_cpi():
     raise NotImplementedError("TODO: Stats NZ CPI (Aotearoa Data Explorer API or CSV)")
-
-
-def fetch_unemployment():
-    raise NotImplementedError("TODO: Stats NZ Household Labour Force Survey")
 
 
 def fetch_ocr(max_changes=6):
@@ -185,7 +181,60 @@ def fetch_bond10():
     return month_ends(rbnz_points(B2_URL, "NZV_B2_FILE", BOND10_SERIES_ID))
 
 
-FETCHERS = {"cpi": fetch_cpi, "unemployment": fetch_unemployment,
+# ---- GDP growth and unemployment: OECD series distributed by FRED (St. Louis Fed) ----
+# Needs a free key from https://fred.stlouisfed.org (set as FRED_API_KEY).
+# Note: FRED's OECD CPI series for NZ stopped in 2023, so CPI is NOT taken from FRED.
+FRED_API = "https://api.stlouisfed.org/fred/series/observations"
+QUARTER_END = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}
+
+
+def _fred_csv(text):
+    """Parse a FRED CSV download: observation_date,SERIES_ID -> [(date, value)]."""
+    rows = list(csv.reader(io.StringIO(text)))[1:]
+    return [(r[0], float(r[1])) for r in rows if len(r) > 1 and r[1] not in ("", ".")]
+
+
+def fred_points(series_id):
+    """[(date, value)]: test file, else the FRED API (if a key is set), else data/raw copy."""
+    local = os.environ.get("NZV_FRED_" + series_id)
+    if local:
+        return _fred_csv(Path(local).read_text(encoding="utf-8-sig"))
+    key = os.environ.get("FRED_API_KEY")
+    if key:
+        try:
+            url = f"{FRED_API}?series_id={series_id}&api_key={key}&file_type=json"
+            data = json.loads(http_get(url, {"User-Agent": "nz-vitals-data-bot/1.0"}))
+            points = [(o["date"], float(o["value"])) for o in data["observations"]
+                      if o["value"] not in ("", ".")]
+            if not points:
+                raise ValueError("no observations returned")
+            return points
+        except Exception as exc:  # never print the URL: it contains the key
+            print(f"WARNING: FRED request for {series_id} failed ({type(exc).__name__} "
+                  f"{getattr(exc, 'code', '')}); using data/raw/{series_id}.csv.", file=sys.stderr)
+    else:
+        print("NOTE: FRED_API_KEY is not set; using the copies in data/raw/.", file=sys.stderr)
+    return _fred_csv((RAW_DIR / f"{series_id}.csv").read_text(encoding="utf-8-sig"))
+
+
+def quarterly(points, quarters=12):
+    """Last N quarters. FRED dates are quarter starts; we store quarter ends plus a label."""
+    out = []
+    for d, v in points[-quarters:]:
+        y, q = int(d[:4]), (int(d[5:7]) - 1) // 3 + 1
+        out.append({"date": f"{y}-{QUARTER_END[q]}", "label": f"{y} Q{q}", "value": round(v, 2)})
+    return out
+
+
+def fetch_gdp():
+    return quarterly(fred_points("NAEXKP01NZQ657S"))
+
+
+def fetch_unemployment():
+    return quarterly(fred_points("LRUNTTTTNZQ156S"))
+
+
+FETCHERS = {"cpi": fetch_cpi, "gdp": fetch_gdp, "unemployment": fetch_unemployment,
             "ocr": fetch_ocr, "nzdusd": fetch_nzdusd,
             "twi": fetch_twi, "bond10": fetch_bond10}
 
