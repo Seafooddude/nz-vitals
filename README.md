@@ -61,3 +61,10 @@ One-off setup:
 
 If the key is missing or the API call fails, the script uses `data/raw/INC_INC_001.csv` and prints a NOTE or WARNING in the
 Actions log. The figures only change once a year, so that copy is fine until the next release.
+
+## GDP growth and unemployment (FRED)
+
+These two come from the OECD's series on FRED (St. Louis Fed). Add a second repo secret named `FRED_API_KEY`
+(free key from https://fred.stlouisfed.org > My Account > API Keys). The workflow must pass it to the job (see `update.yml`).
+Without it the script uses `data/raw/NAEXKP01NZQ657S.csv` and `data/raw/LRUNTTTTNZQ156S.csv`.
+FRED's NZ CPI series ended in 2023, so CPI is not connected from there.
