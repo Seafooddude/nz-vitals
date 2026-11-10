@@ -24,7 +24,7 @@
            tip: "Annual inflation in goods and services not traded internationally (rents, rates, insurance, services). It is generated at home, so the RBNZ watches it closely." },
     houses: { label: "House prices", suffix: "y/y", change: "prev", changeNote: "vs prev. qtr",
            tip: "Annual change in house prices. Housing is a big part of household wealth and spending in New Zealand." },
-    current_account: { label: "Current account", change: "prev", changeNote: "vs prev. qtr",
+    current_account: { label: "Current account", suffix: "NZ$bn", change: "prev", changeNote: "vs prev. qtr",
            tip: "Quarterly balance of New Zealand's trade, investment income and transfers with the world, in NZ$ billion. A deficit means the country is borrowing from abroad to fund spending." },
     consumer_conf: { label: "Consumer confidence", change: "prev", changeNote: "vs prev. month", ref: 100, refLabel: "Long-run average",
            tip: "OECD composite index of how households feel about the economy and their finances. 100 is the long-run average; above 100 is more upbeat than usual." },
@@ -55,6 +55,44 @@
       rows: [["NZD/USD", "nzdusd", "latest"], ["Change since 31 Dec {y}", "nzdusd", "ytd"], ["12-month range (month-ends)", "nzdusd", "range"]],
       note: "A weaker NZ dollar makes imports dearer and tends to lift inflation. A stronger one does the opposite." }
   ];
+
+  // Plain-English notes for each indicator's own page.
+  var NOTES = {
+    gdp: ["The change in the volume of goods and services New Zealand produces from one quarter to the next, adjusted for inflation and seasonal patterns.",
+          "It is the broadest measure of whether the economy is growing or shrinking. Two negative quarters in a row is a common rule of thumb for a recession. Quarterly figures jump around, so the trend matters more than any single quarter."],
+    wages: ["Annual growth in the Labour Cost Index, which tracks what employers pay for the same job over time.",
+            "Fast wage growth can keep inflation high, while slow growth squeezes household budgets. The Reserve Bank watches it for signs of pressure on prices."],
+    unemployment: ["The share of the labour force that has no job and is actively looking for one, from the Household Labour Force Survey.",
+                   "It lags the economy: it tends to rise after growth has already slowed and fall after it has recovered. The Reserve Bank reads it as a gauge of spare capacity in the labour market."],
+    cpi: ["The annual change in the Consumers Price Index, the main measure of inflation in New Zealand.",
+          "The Reserve Bank aims to keep annual inflation between 1% and 3%, focusing on 2% over the medium term. Inflation above the band tends to keep interest rates higher for longer and erodes what wages and savings can buy."],
+    nontradables: ["Inflation in goods and services that are not traded internationally, such as rents, rates, insurance and local services.",
+                   "Because it is driven by domestic demand and costs, it is a sign of underlying inflation pressure that the Reserve Bank watches closely."],
+    houses: ["The annual change in house prices, using the Bank for International Settlements residential property price index.",
+             "Housing is the largest asset for most New Zealand households, so price changes affect wealth, spending and borrowing. The series is quarterly and published with a lag."],
+    consumer_conf: ["An OECD composite index built from household surveys, scaled so that 100 is the long-run average.",
+                    "Confidence leads spending: households that feel worse about jobs and incomes tend to hold back. Above 100 is more upbeat than usual, below 100 is gloomier."],
+    business_conf: ["An OECD composite index built from business surveys on output, orders and the outlook, scaled so that 100 is the long-run average.",
+                    "Firms that expect weaker demand tend to cut back on hiring and investment, so it often turns before output and jobs do."],
+    current_account: ["The balance of New Zealand's transactions with the rest of the world: trade in goods and services, investment income paid and received, and transfers. Shown in NZ$ billion per quarter.",
+                      "A deficit means the country is borrowing from overseas to fund spending. A persistent, large deficit can leave the NZ dollar more exposed to shifts in global sentiment."],
+    ocr: ["The Reserve Bank's policy interest rate, set at scheduled reviews during the year. The chart shows each change as a step.",
+          "Raising the OCR makes borrowing dearer and cools spending and inflation. Cutting it does the opposite. It sets the tone for mortgage and savings rates."],
+    bond10: ["The interest rate the government pays to borrow for ten years, taken from the secondary-market closing yield.",
+             "It reflects expectations for inflation and the OCR, and it anchors longer-term fixed mortgage rates."],
+    nzx50: ["An index of the 50 largest companies listed on the New Zealand sharemarket.",
+            "A quick read on investor confidence and on how the market is pricing the outlook for company profits."],
+    gdt: ["The Global Dairy Trade whole milk powder price in US dollars per tonne.",
+          "Dairy is New Zealand's largest export, so this price influences farm incomes, export earnings and the NZ dollar."],
+    nzdusd: ["US dollars per New Zealand dollar.",
+             "A weaker NZ dollar makes imports dearer, which tends to lift inflation, and helps exporters. A stronger one does the opposite."],
+    twi: ["The trade-weighted index measures the NZ dollar against a basket of 17 currencies, weighted by trade with each country.",
+          "It gives a fuller picture than any single exchange rate, because it reflects the partners New Zealand actually trades with."]
+  };
+
+  // The Key Indicators tiles, in reading order: economy and prices on the first row, rates and sentiment on the second.
+  var KEY_TILES = ["gdp", "unemployment", "wages", "cpi", "nontradables", "houses",
+                   "ocr", "bond10", "nzdusd", "gdt", "consumer_conf", "business_conf"];
 
   // Trend charts are shown in these groups, in this order. Indicators not listed land in "More".
   var GROUPS = [
@@ -108,14 +146,20 @@
 
   // Change vs previous point ("prev") or since last year end ("ytd").
   function delta(ind, mode) {
-    var s = ind.series, last = latest(ind);
-    var ref = mode === "ytd" ? baseline(s) : s[s.length - 2];
+    var s = ind.series;
+    return deltaVs(ind, mode === "ytd" ? baseline(s) : s[s.length - 2], mode);
+  }
+
+  function deltaVs(ind, ref, mode) {
+    var last = latest(ind);
     if (!ref) return null;
     var diff = last.value - ref.value, abs = Math.abs(diff);
     var sign = diff > 0 ? "+" : diff < 0 ? "−" : "";
+    // Percent series: points. Balances (can be negative): change in NZ$ billion. Everything else: % change.
     var text = ind.unit === "%"
       ? (mode === "ytd" ? sign + Math.round(abs * 100) + " bp" : sign + Number(abs.toFixed(2)) + " pp")
-      : sign + (abs / ref.value * 100).toFixed(1) + "%";
+      : ind.unit === "NZ$bn" ? sign + "NZ$" + abs.toFixed(2) + "bn"
+      : sign + (abs / Math.abs(ref.value) * 100).toFixed(1) + "%";
     return { text: text, dir: diff > 0 ? "up" : diff < 0 ? "down" : "flat" };
   }
 
@@ -150,21 +194,44 @@
     return base + ", " + (diff > 0 ? "up" : "down") + " from " + fmt(prev.value, ind.unit) + " " + when(prev) + ".";
   }
 
+  // ---- "new reading since your last visit" ----------------------------------------
+  // We remember the newest date shown for each indicator. A tile gets a blue dot if its date is
+  // newer than the one remembered from the previous visit. The baseline is kept for the browser
+  // tab's session, so a refresh doesn't clear the dots; a new visit does. Storage can be blocked
+  // (private windows), so every access is wrapped and the dots simply don't appear.
+  var seenBase = {};
+  function initSeen(data) {
+    try {
+      var base = sessionStorage.getItem("nzv.base");
+      if (base === null) base = localStorage.getItem("nzv.seen") || "{}";
+      sessionStorage.setItem("nzv.base", base);
+      seenBase = JSON.parse(base) || {};
+      var now = {};
+      data.indicators.forEach(function (i) { if (!i.placeholder && i.series.length) now[i.id] = latest(i).date; });
+      localStorage.setItem("nzv.seen", JSON.stringify(now));
+    } catch (e) { seenBase = {}; }
+  }
+  function isNew(ind) {
+    return !ind.placeholder && ind.series.length && seenBase[ind.id] && latest(ind).date > seenBase[ind.id];
+  }
+
   // ---- components ---------------------------------------------------------
 
   function tile(ind) {
     var c = CFG[ind.id] || { label: ind.name, tip: "" };
-    var el = document.createElement("div");
+    var el = document.createElement(ind.placeholder ? "div" : "a");
     el.className = "tile";
+    if (!ind.placeholder) el.href = "indicator.html?id=" + encodeURIComponent(ind.id);
     if (ind.placeholder) {  // not connected yet: no figures, just the label
       el.className += " soon";
-      el.innerHTML = '<span class="label" title="' + esc(c.tip) + '">' + esc(c.label) + "</span>" +
+      el.innerHTML = '<div class="tile-top"><span class="label" title="' + esc(c.tip) + '">' + esc(c.label) + "</span></div>" +
         '<div class="tile-value">–</div><span class="tag">Coming soon</span>';
       return el;
     }
     var chg = c.change ? delta(ind, c.change) : null;
     el.innerHTML =
-      '<span class="label" title="' + esc(c.tip) + '">' + esc(c.label) + "</span>" +
+      '<div class="tile-top"><span class="label" title="' + esc(c.tip) + '">' + esc(c.label) + "</span>" +
+      (isNew(ind) ? '<span class="newdot" title="New reading since your last visit" role="img" aria-label="New reading since your last visit"></span>' : "") + "</div>" +
       '<div class="tile-value">' + esc(fmt(latest(ind).value, ind.unit)) +
         (c.suffix ? " <small>" + esc(c.suffix) + "</small>" : "") + "</div>" +
       '<div class="tile-meta"><span>' + esc(fmtDate(latest(ind))) + "</span>" +
@@ -186,7 +253,7 @@
     });
     el.innerHTML = "<h3>" + esc(q.title) + (sample ? '<span class="tag">Coming soon</span>' : "") + "</h3>" +
       (sample && !html ? '<p class="soon-text">Not connected to official data yet.</p>' : html) +
-      '<p class="qnote">' + esc(q.note) + '</p><a class="qlink" href="#trend-' + esc(q.link) + '">See trend →</a>';
+      '<p class="qnote">' + esc(q.note) + '</p><a class="qlink" href="indicator.html?id=' + esc(q.link) + '">Full history →</a>';
     return el;
   }
 
@@ -195,11 +262,12 @@
     el.className = "card";
     el.id = "trend-" + ind.id;
     el.innerHTML =
-      "<h2>" + esc(ind.name) + '<span class="tag">' + esc(ind.frequency) + "</span>" +
+      "<h2>" + (ind.placeholder ? esc(ind.name) : '<a href="indicator.html?id=' + encodeURIComponent(ind.id) + '">' + esc(ind.name) + "</a>") + '<span class="tag">' + esc(ind.frequency) + "</span>" +
         (ind.placeholder ? '<span class="tag">Coming soon</span>' : "") + "</h2>" +
       (ind.placeholder ? '<p class="soon-text">Not connected to official data yet.</p>'
         : '<div class="chart-host"></div><p class="summary">' + esc(caption(ind)) + "</p>") +
-      '<p class="source">' + (ind.placeholder ? "Planned source: " : "Source: ") + '<a href="' + esc(ind.url) + '">' + esc(ind.source) + "</a></p>";
+      '<p class="source">' + (ind.placeholder ? "Planned source: " : "Source: ") + '<a href="' + esc(ind.url) + '">' + esc(ind.source) + "</a>" +
+        (ind.placeholder ? "" : ' · <a href="indicator.html?id=' + encodeURIComponent(ind.id) + '">Full history →</a>') + "</p>";
     return el;
   }
 
@@ -254,7 +322,7 @@
   function drawChart(host, ind) {
     var cfg = CFG[ind.id] || {}, step = cfg.step;
     var s = windowed(ind, step);
-    var W = Math.max(host.clientWidth, 220), H = 200, L = 40, R = 12, T = 14, B = 26;
+    var W = Math.max(host.clientWidth, 220), H = parseInt(host.getAttribute("data-h"), 10) || 200, L = 40, R = 12, T = 14, B = 26;
     var t = s.map(function (p) { return Date.parse(p.date); });
     var span = (t[t.length - 1] - t[0]) || 1;
     var vals = s.map(function (p) { return p.value; });
@@ -263,7 +331,7 @@
     if (cfg.ref != null) { lo = Math.min(lo, cfg.ref); hi = Math.max(hi, cfg.ref); }
     var pad = (hi - lo) * 0.12 || 1;
     lo -= pad; hi += pad;
-    var nt = niceTicks(lo, hi, 4);
+    var nt = niceTicks(lo, hi, H > 260 ? 6 : 4);
     var X = function (v) { return L + (v - t[0]) / span * (W - L - R); };
     var Y = function (v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); };
     var xs = t.map(X), ys = vals.map(Y);
@@ -362,73 +430,53 @@
     charts.push(function () { render(true); });
   }
 
-  // ---- earnings by region (map + bars) ----------------------------------------
+  // ---- regional map + bars (shared by earnings and population) --------------------
 
   var RAMP = ["#dbe9f5", "#a9cbe6", "#6aa6d3", "#2e80bd", "#0a4f86"];
 
-  function renderRegions(r, host, geo) {
-    if (!r) {
-      host.innerHTML = '<p class="soon-text">Not connected to official data yet.</p>';
-      return;
-    }
-    var mode = "hourly";
-    var money = function (v, m) {
-      return "$" + (m === "hourly" ? Number(v).toFixed(2) : Math.round(v).toLocaleString("en-NZ"));
-    };
-    var change = function (cur, prev) {
-      if (prev == null) return "";
-      var p = (cur - prev) / prev * 100;
-      return (p > 0 ? "+" : p < 0 ? "−" : "") + Math.abs(p).toFixed(1) + "% on " + r.previous;
-    };
+  // cfg.modes: [{id, label}], cfg.initial, cfg.group (aria label for the switch), cfg.mapLabel(mode),
+  // cfg.build(mode) -> { rows: [{name, v, val, tip, aria}], fmt(v), nat (a dashed national marker, or null), note }
+  function regionView(host, geo, cfg) {
+    var mode = cfg.initial;
 
     function draw() {
-      var key = mode === "hourly" ? "median_hourly" : "median_weekly";
-      var unit = mode === "hourly" ? " per hour" : " per week";
-      var rows = r.items.slice().sort(function (a, b) { return b[key] - a[key]; });
-      var vals = rows.map(function (i) { return i[key]; });
+      var b = cfg.build(mode);
+      var rows = b.rows.slice().sort(function (x, y) { return y.v - x.v; });
+      var vals = rows.map(function (i) { return i.v; });
       var vmin = Math.min.apply(null, vals), vmax = Math.max.apply(null, vals);
-      var max = Math.max(vmax, r.national[key]) * 1.08;
-      var nat = r.national[key] / max * 100;
+      var max = Math.max(vmax, b.nat || 0) * 1.08;
+      var nat = b.nat == null ? null : b.nat / max * 100;
       var shade = function (v) { return RAMP[Math.min(RAMP.length - 1, Math.floor((v - vmin) / ((vmax - vmin) || 1) * RAMP.length))]; };
-      var tipText = function (i) {
-        var ch = change(i[key], i["prev_" + key]);
-        return "<span>" + esc(i.name) + " · " + esc(r.periodLabel) + "</span><strong>" + esc(money(i[key], mode) + unit) + "</strong>" +
-               "<span>" + esc((ch ? ch + " · " : "") + Math.round(i.people * 1000).toLocaleString("en-NZ") + " people") + "</span>";
-      };
+      var byName = {};
+      rows.forEach(function (i) { byName[i.name] = i; });
 
       var map = "";
       if (geo) {
-        var byName = {};
-        rows.forEach(function (i) { byName[i.name] = i; });
-        map = '<div class="rmap"><svg viewBox="0 0 ' + geo.width + " " + geo.height + '" role="group" aria-label="Map of median ' + mode + ' earnings by region">' +
+        map = '<div class="rmap"><svg viewBox="0 0 ' + geo.width + " " + geo.height + '" role="group" aria-label="' + esc(cfg.mapLabel(mode)) + '">' +
           Object.keys(geo.regions).filter(function (n) { return byName[n]; }).map(function (n) {
-            var i = byName[n];
-            return '<path class="rpath" data-r="' + esc(n) + '" d="' + geo.regions[n] + '" fill="' + shade(i[key]) + '" tabindex="0" role="img" aria-label="' +
-              esc(n + ": " + money(i[key], mode) + unit) + '"/>';
+            return '<path class="rpath" data-r="' + esc(n) + '" d="' + geo.regions[n] + '" fill="' + shade(byName[n].v) +
+              '" tabindex="0" role="img" aria-label="' + esc(byName[n].aria) + '"/>';
           }).join("") + '</svg><div class="maptip" role="tooltip"></div>' +
-          '<div class="rlegend"><span>' + esc(money(vmin, mode)) + '</span><span class="ramp">' +
-          RAMP.map(function (c) { return '<i style="background:' + c + '"></i>'; }).join("") + '</span><span>' + esc(money(vmax, mode)) + "</span></div></div>";
+          '<div class="rlegend"><span>' + esc(b.fmt(vmin)) + '</span><span class="ramp">' +
+          RAMP.map(function (c) { return '<i style="background:' + c + '"></i>'; }).join("") + '</span><span>' + esc(b.fmt(vmax)) + "</span></div></div>";
       }
 
       host.innerHTML =
-        '<div class="seg" role="group" aria-label="Earnings measure">' +
-          ["hourly", "weekly"].map(function (m) {
-            return '<button type="button" data-m="' + m + '" aria-pressed="' + (m === mode) + '">Median ' + m + "</button>";
+        '<div class="seg" role="group" aria-label="' + esc(cfg.group) + '">' +
+          cfg.modes.map(function (m) {
+            return '<button type="button" data-m="' + esc(m.id) + '" aria-pressed="' + (m.id === mode) + '">' + esc(m.label) + "</button>";
           }).join("") + "</div>" +
         '<div class="rwrap' + (geo ? " withmap" : "") + '">' + map +
         '<div class="rlist">' + rows.map(function (i) {
           return '<div class="rrow" tabindex="0" data-r="' + esc(i.name) + '">' +
             '<span class="rname">' + esc(i.name) + "</span>" +
-            '<span class="rtrack"><span class="rbar" style="width:' + (i[key] / max * 100).toFixed(1) + '%"></span>' +
-              '<span class="rnat" style="left:' + nat.toFixed(1) + '%"></span></span>' +
-            '<span class="rval">' + esc(money(i[key], mode)) + "</span>" +
-            '<div class="rtip" role="tooltip">' + tipText(i) + "</div>" +
+            '<span class="rtrack"><span class="rbar" style="width:' + Math.max(0, i.v / max * 100).toFixed(1) + '%"></span>' +
+              (nat == null ? "" : '<span class="rnat" style="left:' + nat.toFixed(1) + '%"></span>') + "</span>" +
+            '<span class="rval">' + esc(i.val) + "</span>" +
+            '<div class="rtip" role="tooltip">' + i.tip + "</div>" +
             "</div>";
         }).join("") + "</div></div>" +
-        '<p class="rnote">Median ' + mode + " earnings of people in paid employment, " + esc(r.periodLabel) +
-          ". Dashed line: New Zealand overall (" + esc(money(r.national[key], mode)) + "). Source: " +
-          '<a href="' + esc(r.url) + '">Stats NZ</a>. Survey estimates, so smaller regions can move around from year to year. ' +
-          "Earnings from paid employment only: benefits and investment income are not included.</p>";
+        '<p class="rnote">' + b.note + "</p>";
 
       // Hovering or focusing a region on the map or in the list highlights both.
       var mapEl = host.querySelector(".rmap"), mtip = host.querySelector(".maptip");
@@ -439,12 +487,12 @@
       }
       function place(name, x, y) {
         if (!mtip) return;
-        var it = byName && byName[name];
+        var it = byName[name];
         if (!it) { mtip.className = "maptip"; return; }
-        var b = mapEl.getBoundingClientRect();
-        mtip.innerHTML = tipText(it);
-        mtip.style.left = Math.min(Math.max(x - b.left, 90), b.width - 90) + "px";
-        mtip.style.top = (y - b.top - 12) + "px";
+        var bx = mapEl.getBoundingClientRect();
+        mtip.innerHTML = it.tip;
+        mtip.style.left = Math.min(Math.max(x - bx.left, 90), bx.width - 90) + "px";
+        mtip.style.top = (y - bx.top - 12) + "px";
         mtip.className = "maptip on";
       }
       host.querySelectorAll("[data-r]").forEach(function (el) {
@@ -454,21 +502,114 @@
         el.addEventListener("pointerleave", function () { light(null); if (mtip) mtip.className = "maptip"; });
         el.addEventListener("focus", function () {
           light(name);
-          if (isPath) { var b = el.getBoundingClientRect(); place(name, b.left + b.width / 2, b.top + b.height / 2); }
+          if (isPath) { var r = el.getBoundingClientRect(); place(name, r.left + r.width / 2, r.top + r.height / 2); }
         });
         el.addEventListener("blur", function () { light(null); if (mtip) mtip.className = "maptip"; });
       });
     }
 
     host.addEventListener("click", function (e) {
-      var b = e.target.closest("button[data-m]");
-      if (!b || b.getAttribute("data-m") === mode) return;
-      mode = b.getAttribute("data-m");
+      var btn = e.target.closest("button[data-m]");
+      if (!btn || btn.getAttribute("data-m") === mode) return;
+      mode = btn.getAttribute("data-m");
       draw();
       var again = host.querySelector('button[data-m="' + mode + '"]');
       if (again) again.focus();
     });
     draw();
+  }
+
+  // ---- earnings by region ----------------------------------------------------
+
+  function renderRegions(r, host, geo) {
+    if (!r) {
+      host.innerHTML = '<p class="soon-text">Not connected to official data yet.</p>';
+      return;
+    }
+    var money = function (v, m) {
+      return "$" + (m === "hourly" ? Number(v).toFixed(2) : Math.round(v).toLocaleString("en-NZ"));
+    };
+    var change = function (cur, prev) {
+      if (prev == null) return "";
+      var p = (cur - prev) / prev * 100;
+      return (p > 0 ? "+" : p < 0 ? "−" : "") + Math.abs(p).toFixed(1) + "% on " + r.previous;
+    };
+    regionView(host, geo, {
+      initial: "hourly",
+      group: "Earnings measure",
+      modes: [{ id: "hourly", label: "Median hourly" }, { id: "weekly", label: "Median weekly" }],
+      mapLabel: function (m) { return "Map of median " + m + " earnings by region"; },
+      build: function (mode) {
+        var key = mode === "hourly" ? "median_hourly" : "median_weekly";
+        var unit = mode === "hourly" ? " per hour" : " per week";
+        return {
+          fmt: function (v) { return money(v, mode); },
+          nat: r.national[key],
+          rows: r.items.map(function (i) {
+            var ch = change(i[key], i["prev_" + key]);
+            return { name: i.name, v: i[key], val: money(i[key], mode), aria: i.name + ": " + money(i[key], mode) + unit,
+              tip: "<span>" + esc(i.name) + " · " + esc(r.periodLabel) + "</span><strong>" + esc(money(i[key], mode) + unit) + "</strong>" +
+                   "<span>" + esc((ch ? ch + " · " : "") + Math.round(i.people * 1000).toLocaleString("en-NZ") + " people") + "</span>" };
+          }),
+          note: "Median " + mode + " earnings of people in paid employment, " + esc(r.periodLabel) +
+            ". Dashed line: New Zealand overall (" + esc(money(r.national[key], mode)) + "). Source: " +
+            '<a href="' + esc(r.url) + '">Stats NZ</a>. Survey estimates, so smaller regions can move around from year to year. ' +
+            "Earnings from paid employment only: benefits and investment income are not included."
+        };
+      }
+    });
+  }
+
+  // ---- population by region (latest base year and Stats NZ projections) -----------
+
+  function renderPopulation(p, host, geo) {
+    var n = function (v) { return Math.round(v).toLocaleString("en-NZ"); };
+    var pct = function (v) { return (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1) + "%"; };
+    var base = String(p.baseYear), last = String(p.years[p.years.length - 1]);
+    var shown = p.years.filter(function (y) { return (y - p.baseYear) % 10 === 0; }).map(String);
+    var modes = shown.map(function (y) { return { id: y, label: y }; });   // the note and tooltip say which is the base year
+    modes.push({ id: "growth", label: "Growth to " + last });
+
+    regionView(host, geo, {
+      initial: base,
+      group: "Population year",
+      modes: modes,
+      mapLabel: function (m) { return m === "growth" ? "Map of projected population growth to " + last + " by region" : "Map of population in " + m + " by region"; },
+      build: function (mode) {
+        var src = '<a href="' + esc(p.url) + '">Stats NZ</a>';
+        var tail = " Source: " + src + ", subnational population projections (" + esc(p.projection.toLowerCase()) + " scenario, base year " + esc(base) +
+          "). Projections are not forecasts, and Stats NZ rounds them. " + esc(base) + " is the newest figure in this dataset.";
+        if (mode === "growth") {
+          var g = function (v) { return (v[last] - v[base]) / v[base] * 100; };
+          return {
+            fmt: pct,
+            nat: g(p.national),
+            rows: p.items.map(function (i) {
+              var v = g(i.values);
+              return { name: i.name, v: v, val: pct(v), aria: i.name + ": " + pct(v) + " by " + last,
+                tip: "<span>" + esc(i.name) + " · " + esc(base) + " to " + esc(last) + "</span><strong>" + esc(pct(v)) + "</strong>" +
+                     "<span>" + esc(n(i.values[base]) + " → " + n(i.values[last]) + " people") + "</span>" };
+            }),
+            note: "Projected change in population between " + esc(base) + " and " + esc(last) + ". Dashed line: New Zealand overall (" +
+              esc(pct(g(p.national))) + ")." + tail
+          };
+        }
+        var total = p.national[mode], isBase = mode === base;
+        return {
+          fmt: n,
+          nat: null,
+          rows: p.items.map(function (i) {
+            var v = i.values[mode], d = v - i.values[base];
+            var line = (v / total * 100).toFixed(1) + "% of New Zealand" +
+              (isBase ? "" : " · " + (d >= 0 ? "+" : "−") + n(Math.abs(d)) + " (" + pct(d / i.values[base] * 100) + ") since " + base);
+            return { name: i.name, v: v, val: n(v), aria: i.name + ": " + n(v) + " people in " + mode,
+              tip: "<span>" + esc(i.name) + " · " + esc(mode) + (isBase ? " (base year)" : " (projected)") + "</span><strong>" + esc(n(v)) + " people</strong>" +
+                   "<span>" + esc(line) + "</span>" };
+          }),
+          note: (isBase ? "Estimated" : "Projected") + " resident population at 30 June " + esc(mode) + ". New Zealand total: " + esc(n(total)) + "." + tail
+        };
+      }
+    });
   }
 
   // ---- trend sections -----------------------------------------------------------
@@ -483,7 +624,7 @@
     if (rest.length) groups.push({ id: "more", title: "More", inds: rest });
     groups = groups.filter(function (g) { return g.inds.length; });
 
-    $("jump").innerHTML = groups.map(function (g) { return '<a href="#g-' + g.id + '">' + esc(g.title) + "</a>"; }).join("");
+    if ($("jump")) $("jump").innerHTML = groups.map(function (g) { return '<a href="#g-' + g.id + '">' + esc(g.title) + "</a>"; }).join("");
     groups.forEach(function (g) {
       var sec = document.createElement("section");
       sec.className = "tgroup";
@@ -502,6 +643,7 @@
 
   function setupRange() {
     var box = $("range");
+    if (!box) return;
     box.addEventListener("click", function (e) {
       var b = e.target.closest("button[data-y]");
       if (!b) return;
@@ -513,8 +655,128 @@
     });
   }
 
+  // ---- indicator detail page (indicator.html?id=cpi) ----------------------------
+
+  // The latest point on or before the same date a year earlier.
+  function yearAgo(s) {
+    var last = s[s.length - 1].date, cut = (parseInt(last.slice(0, 4), 10) - 1) + last.slice(4), base = null;
+    s.forEach(function (p) { if (p.date <= cut) base = p; });
+    return base;
+  }
+
+  function chgHtml(d) {
+    return d ? '<span class="chg ' + d.dir + '">' + esc(d.text) + "</span>" : "–";
+  }
+
+  function renderDetail(data) {
+    var root = $("detail"), id = new URLSearchParams(location.search).get("id");
+    var ind = data.indicators.filter(function (i) { return i.id === id; })[0];
+    if (!ind) {
+      root.innerHTML = '<p class="crumb"><a href="index.html">← Dashboard</a></p><h1>Indicator not found</h1>' +
+        '<p>There is no indicator called "' + esc(id || "") + '". <a href="index.html#key-indicators">See all indicators</a>.</p>';
+      return;
+    }
+    var c = CFG[ind.id] || { label: ind.name, tip: "" }, notes = NOTES[ind.id] || [c.tip || "", ""];
+    document.title = ind.name + " | NZ Vitals";
+    // Each indicator is its own page, so give it its own canonical URL.
+    var canon = document.querySelector('link[rel="canonical"]');
+    if (canon) canon.href = "https://nz-vitals.pages.dev/indicator.html?id=" + encodeURIComponent(ind.id);
+
+    var linked = data.indicators.filter(function (i) { return !i.placeholder; });
+    var pos = linked.indexOf(ind), prev = pos > 0 ? linked[pos - 1] : null, next = pos >= 0 && pos < linked.length - 1 ? linked[pos + 1] : null;
+    var pn = '<nav class="pn" aria-label="Other indicators">' +
+      (prev ? '<a href="indicator.html?id=' + encodeURIComponent(prev.id) + '">← ' + esc((CFG[prev.id] || {}).label || prev.name) + "</a>" : "<span></span>") +
+      (next ? '<a href="indicator.html?id=' + encodeURIComponent(next.id) + '">' + esc((CFG[next.id] || {}).label || next.name) + " →</a>" : "<span></span>") + "</nav>";
+
+    var head = '<p class="crumb"><a href="index.html">← Dashboard</a></p>' +
+      "<h1>" + esc(ind.name) + '<span class="tag">' + esc(ind.frequency) + "</span></h1>";
+    var about = '<section class="about-ind"><h2 class="section-title">What it measures</h2><p>' + esc(notes[0]) + "</p>" +
+      '<h2 class="section-title">Why it matters</h2><p>' + esc(notes[1]) + "</p></section>";
+    var src = '<p class="source">' + (ind.placeholder ? "Planned source: " : "Source: ") + '<a href="' + esc(ind.url) + '">' + esc(ind.source) + "</a> · " + esc(ind.frequency) + "</p>";
+
+    if (ind.placeholder) {
+      root.innerHTML = head + '<p class="soon-text">Not connected to official data yet.</p>' + about + src + pn;
+      return;
+    }
+
+    var s = ind.series, last = latest(ind), step = c.step;
+    var dPrev = deltaVs(ind, s[s.length - 2], "prev"), ya = yearAgo(s), dYear = ya ? deltaVs(ind, ya, "prev") : null;
+    root.innerHTML = head +
+      '<div class="hero"><div class="big">' + esc(fmt(last.value, ind.unit)) + (c.suffix ? " <small>" + esc(c.suffix) + "</small>" : "") + "</div>" +
+        '<div class="hero-meta">' + esc(fmtDate(last)) + (dPrev ? " · " + chgHtml(dPrev) + " " + esc(c.changeNote || "vs previous") : "") + "</div></div>" +
+      '<p class="lede">' + esc(caption(ind)) + "</p>" +
+      '<div class="trend-bar"><p class="hint">Hover over (or tap) the chart to see the values.</p>' +
+        '<div class="seg" id="range" role="group" aria-label="Chart time range">' +
+          '<button type="button" data-y="1" aria-pressed="false">1Y</button>' +
+          '<button type="button" data-y="5" aria-pressed="false">5Y</button>' +
+          '<button type="button" data-y="0" aria-pressed="true">Max</button></div></div>' +
+      '<article class="card bigchart"><div class="chart-host" data-h="340"></div></article>' +
+      '<div class="stats" id="stats"></div>' +
+      about +
+      '<section><h2 class="section-title">Data</h2><div class="data-actions"><button type="button" class="btn" id="csv">Download CSV</button>' +
+        '<button type="button" class="btn" id="more"></button></div><div id="dtable"></div></section>' +
+      src + pn;
+
+    mountChart(root.querySelector(".chart-host"), ind);
+
+    // Stats for the chosen time range
+    function stats() {
+      var w = windowed(ind, step).filter(function (p) { return !p.synthetic; }), hi = w[0], lo = w[0];
+      w.forEach(function (p) { if (p.value > hi.value) hi = p; if (p.value < lo.value) lo = p; });
+      var span = rangeYears ? "last " + (rangeYears === 1 ? "year" : rangeYears + " years") : "all data";
+      var box = function (label, big, small) {
+        return '<div class="stat"><span class="label">' + esc(label) + "</span><b>" + big + "</b><small>" + esc(small || "") + "</small></div>";
+      };
+      $("stats").innerHTML =
+        box("Latest", esc(fmt(last.value, ind.unit)), fmtDate(last)) +
+        box("Change on previous", chgHtml(dPrev), s.length > 1 ? "from " + fmt(s[s.length - 2].value, ind.unit) + " in " + fmtDate(s[s.length - 2]) : "") +
+        box("Change on a year ago", chgHtml(dYear), ya ? "from " + fmt(ya.value, ind.unit) + " in " + fmtDate(ya) : "") +
+        box("Highest (" + span + ")", esc(fmt(hi.value, ind.unit)), fmtDate(hi)) +
+        box("Lowest (" + span + ")", esc(fmt(lo.value, ind.unit)), fmtDate(lo));
+    }
+    stats();
+    charts.push(stats);
+
+    // Data table (newest first) and CSV
+    var all = false;
+    function table() {
+      var idx = s.map(function (_, k) { return k; }).reverse();
+      if (!all) idx = idx.slice(0, 12);
+      $("dtable").innerHTML = '<table class="dtable"><thead><tr><th scope="col">Period</th><th scope="col" class="num">Value</th><th scope="col" class="num">Change on previous</th></tr></thead><tbody>' +
+        idx.map(function (k) {
+          var d = k > 0 ? deltaVs({ unit: ind.unit, series: [s[k]] }, s[k - 1], "prev") : null;
+          return "<tr><td>" + esc(fmtDate(s[k])) + '</td><td class="num">' + esc(fmt(s[k].value, ind.unit)) + '</td><td class="num">' + chgHtml(d) + "</td></tr>";
+        }).join("") + "</tbody></table>";
+      $("more").textContent = all ? "Show latest 12" : "Show all " + s.length;
+      $("more").hidden = s.length <= 12;
+    }
+    table();
+    $("more").addEventListener("click", function () { all = !all; table(); });
+    $("csv").addEventListener("click", function () {
+      var rows = ["date,period,value"].concat(s.map(function (p) { return [p.date, '"' + fmtDate(p) + '"', p.value].join(","); }));
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([rows.join("\n") + "\n"], { type: "text/csv" }));
+      a.download = "nz-vitals-" + ind.id + ".csv";
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+  }
+
+  function startDetail() {
+    rangeYears = 0;   // detail pages open on the full history
+    fetch("data/data.json", { cache: "no-cache" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (data) { renderDetail(data); setupRange(); })
+      .catch(function (err) {
+        $("detail").innerHTML = '<p class="status">Could not load data (' + esc(err.message) + ").</p>";
+      });
+  }
+
   // ---- start ----------------------------------------------------------------
 
+  if ($("detail")) { startDetail(); return; }
   setupRange();
   Promise.all([
     fetch("data/data.json", { cache: "no-cache" }).then(function (r) {
@@ -529,9 +791,17 @@
       var by = {};
       data.indicators.forEach(function (ind) { by[ind.id] = ind; });
 
-      data.indicators.forEach(function (ind) { $("tiles").appendChild(tile(ind)); });
+      initSeen(data);
+      // The tile grid shows a fixed, even set of 12 (2 rows of 6, 3 of 4 or 6 of 2) so every row is full.
+      // Everything else is still charted under Trends and has its own page.
+      KEY_TILES.forEach(function (id) { if (by[id]) $("tiles").appendChild(tile(by[id])); });
       QUESTIONS.forEach(function (q) { $("qgrid").appendChild(question(q, by)); });
       renderRegions(data.regions, $("regions-body"), geo);
+      // Population is optional: the section stays hidden if the data file doesn't have it yet.
+      if (data.population && $("population")) {
+        renderPopulation(data.population, $("population-body"), geo);
+        $("population").hidden = false;
+      }
       renderTrends(data);
 
       // "As of" = the date of the newest real (non-placeholder) observation.

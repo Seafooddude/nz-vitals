@@ -11,7 +11,7 @@ css/style.css         all styling (Helvetica, white / black / Knicks blue)
 js/app.js             renders cards + SVG charts from data/data.json
 data/data.json        the main data file the site reads
 data/nz-regions.json  simplified outlines of the 12 regions, for the earnings map (from Natural Earth, public domain)
-data/raw/             fallback copies of the source files (RBNZ spreadsheets + Stats NZ earnings CSV)
+data/raw/             fallback copies of the source files (RBNZ spreadsheets, Stats NZ earnings and population CSVs)
 favicon.svg, og-image.png, sitemap.xml, robots.txt, _headers   site extras
 scripts/update_data.py  fetch + validate + write data.json (fetchers are stubs)
 .github/workflows/update.yml  daily cron that runs the script and commits
@@ -95,3 +95,19 @@ charts start there. Target bands and reference lines (CPI 1-3%, confidence 100) 
 
 The map outlines come from Natural Earth admin-1 boundaries, merged into the same 12 regions Stats NZ uses and simplified to
 about 20 KB. Region names in `data/nz-regions.json` must match the names in `REGION_NAMES` in `scripts/update_data.py`.
+
+## Indicator pages
+
+Every connected indicator tile, trend chart title and "Four Questions" link opens `indicator.html?id=<id>` (for example
+`indicator.html?id=cpi`). The page is built in the browser by `renderDetail()` in `js/app.js` from `data/data.json`: a large chart
+with the 1Y / 5Y / Max switch, summary figures, a "what it measures / why it matters" note (the `NOTES` list in `app.js`),
+a table of past values and a CSV download. To add text for a new indicator, add an entry to `NOTES`. The update script lists
+each page in `sitemap.xml`.
+
+## Population by region
+
+`fetch_population()` in `scripts/update_data.py` reads Stats NZ dataflow `POPPR_SUB_014` (subnational population projections,
+medium scenario, both sexes, all ages) through the same API key as the earnings data (`STATSNZ_API_KEY`). Without a key it
+reads `data/raw/POPPR_SUB_014.csv`. The 16 regional councils are merged into the 12 map regions (`POP_GROUPS`), and the update
+fails loudly if the regions stop adding up to the national total. The base year (2023) is the newest figure in this dataset; later years are
+projections at 5-year steps. The section hides itself if `data.json` has no `population` block.

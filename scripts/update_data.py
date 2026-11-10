@@ -38,11 +38,29 @@ TWI_SERIES_ID = "EXRT.DS41.NZB17"  # Trade-weighted index, 17 currency basket
 BOND10_SERIES_ID = "INM.DG110.NZZCF"  # Govt bond closing yield, 10 year, %pa
 
 
-def bump_sitemap(today):
-    """Set the home page's <lastmod> to today (the about page is left alone)."""
-    xml = SITEMAP_FILE.read_text()
-    new = re.sub(r"(<loc>[^<]*/</loc>\s*<lastmod>)[^<]*(</lastmod>)", r"\g<1>" + today + r"\g<2>", xml, count=1)
-    SITEMAP_FILE.write_text(new)
+SITE = "https://nz-vitals.pages.dev/"
+
+
+def bump_sitemap(today, indicators=()):
+    """Rewrite sitemap.xml: home page (lastmod = today), the about page (lastmod kept),
+    and one entry per connected indicator's detail page."""
+    about_mod = today
+    if SITEMAP_FILE.exists():
+        m = re.search(r"about\.html</loc>\s*<lastmod>([^<]*)</lastmod>", SITEMAP_FILE.read_text())
+        if m:
+            about_mod = m.group(1)
+
+    def url(loc, mod, freq, prio):
+        return ("  <url>\n    <loc>%s</loc>\n    <lastmod>%s</lastmod>\n    <changefreq>%s</changefreq>\n"
+                "    <priority>%s</priority>\n  </url>\n" % (loc, mod, freq, prio))
+
+    body = url(SITE, today, "daily", "1.0") + url(SITE + "about.html", about_mod, "monthly", "0.5")
+    for ind in indicators:
+        if ind.get("placeholder") or not ind.get("series"):
+            continue
+        body += url(SITE + "indicator.html?id=" + ind["id"], ind["series"][-1]["date"], "weekly", "0.7")
+    SITEMAP_FILE.write_text('<?xml version="1.0" encoding="UTF-8"?>\n'
+                            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + body + "</urlset>\n")
 
 
 BROWSER_HEADERS = {
@@ -389,9 +407,9 @@ MEASURES = {"MED_HOUR_INC": "median_hourly", "MED_WEEK_INC": "median_weekly", "N
 LIMITS = {"median_hourly": (10, 80), "median_weekly": (300, 4000), "people": (1, 3000)}
 
 
-def ade_text():
-    """CSV text: test file, else the Stats NZ API (if a key is set), else data/raw copy."""
-    local = os.environ.get("NZV_ADE_FILE")
+def ade_text(url=ADE_URL, fallback=ADE_FALLBACK, env_var="NZV_ADE_FILE"):
+    """CSV text: test file, else the Stats NZ API (if a key is set), else the data/raw copy."""
+    local = os.environ.get(env_var)
     if local:
         return Path(local).read_text(encoding="utf-8-sig")
     key = os.environ.get("STATSNZ_API_KEY")
@@ -399,16 +417,16 @@ def ade_text():
         try:
             headers = {"Ocp-Apim-Subscription-Key": key, "Accept": "application/vnd.sdmx.data+csv",
                        "User-Agent": "nz-vitals-data-bot/1.0"}
-            text = http_get(ADE_URL, headers).decode("utf-8-sig")
+            text = http_get(url, headers).decode("utf-8-sig")
             if "OBS_VALUE" not in text.split("\n", 1)[0]:
                 raise ValueError("response was not SDMX-CSV")
             return text
         except Exception as exc:
-            print(f"WARNING: Stats NZ API request failed ({exc}); using data/raw/{ADE_FALLBACK.name}.",
+            print(f"WARNING: Stats NZ API request failed ({exc}); using data/raw/{fallback.name}.",
                   file=sys.stderr)
     else:
         print("NOTE: STATSNZ_API_KEY is not set; using the copy in data/raw/.", file=sys.stderr)
-    return ADE_FALLBACK.read_text(encoding="utf-8-sig")
+    return fallback.read_text(encoding="utf-8-sig")
 
 
 def _find(cols, *names):
@@ -468,6 +486,71 @@ def fetch_regions():
             "url": "https://explore.data.stats.govt.nz/", "latest": latest, "previous": previous,
             "periodLabel": f"June {latest}", "national": national, "items": items}
 
+# ---- Population by region: Stats NZ subnational population projections (POPPR_SUB_014) ----
+# Medium projection, both sexes, all ages, every area and year. The base year is 30 June 2023;
+# later years are projections at 5-year steps. Same free API key as the earnings data above.
+POP_URL = ("https://api.data.stats.govt.nz/rest/data/STATSNZ,POPPR_SUB_014,1.0/"
+           "MEDIUM...SEX3.TOTALALLAGES?dimensionAtObservation=AllDimensions")
+POP_FALLBACK = RAW_DIR / "POPPR_SUB_014.csv"
+# The 16 regional councils, merged into the same 12 regions as the earnings data and the map.
+POP_GROUPS = {
+    "Northland": ["01"], "Auckland": ["02"], "Waikato": ["03"], "Bay of Plenty": ["04"],
+    "Gisborne/Hawke's Bay": ["05", "06"], "Taranaki": ["07"], "Manawatu-Whanganui": ["08"],
+    "Wellington": ["09"], "Nelson/Tasman/Marlborough/West Coast": ["16", "17", "18", "12"],
+    "Canterbury": ["13"], "Otago": ["14"], "Southland": ["15"],
+}
+POP_TOTAL_CODE = "NZRC"   # "Total, New Zealand by region"
+
+
+def fetch_population():
+    reader = csv.DictReader(io.StringIO(ade_text(POP_URL, POP_FALLBACK, "NZV_POP_FILE")))
+    cols = reader.fieldnames or []
+    c_area = _find(cols, "AREA_POPPR_SUB_014")
+    c_year = _find(cols, "YEAR_POPPR_SUB_014")
+    c_val = _find(cols, "OBS_VALUE")
+    c_proj = next((c for c in cols if c.strip().startswith("PROJECTION_POPPR_SUB_014")), None)
+    c_sex = next((c for c in cols if c.strip().startswith("SEX_POPPR_SUB_014")), None)
+    c_age = next((c for c in cols if c.strip().startswith("AGE_POPPR_SUB_014")), None)
+
+    cells = {}  # (area code, year) -> people
+    for row in reader:
+        # The query already narrows these, but check, so a changed query can't mix scenarios.
+        if c_proj and _code(row[c_proj]) != "MEDIUM": continue
+        if c_sex and _code(row[c_sex]) != "SEX3": continue
+        if c_age and _code(row[c_age]) != "TOTALALLAGES": continue
+        if not (row[c_val] or "").strip(): continue
+        cells[(_code(row[c_area]), int(_code(row[c_year])))] = float(row[c_val])
+
+    years = sorted({y for (_, y) in cells})
+    if len(years) < 2:
+        raise ValueError("fewer than two years of data")
+    items, totals = [], {}
+    for y in years:
+        total = cells.get((POP_TOTAL_CODE, y))
+        if total is None:
+            raise ValueError(f"missing national total for {y}")
+        if not 3_000_000 <= total <= 12_000_000:
+            raise ValueError(f"national total out of range for {y}: {total}")
+        totals[str(y)] = int(total)
+        # The 16 regions must add up to the national total (a few hundred people live "outside region").
+        added = sum(cells[(c, y)] for cs in POP_GROUPS.values() for c in cs if (c, y) in cells)
+        if abs(added - total) / total > 0.01:
+            raise ValueError(f"regions add up to {added:.0f} but the total is {total:.0f} in {y}")
+    for name, codes in POP_GROUPS.items():
+        values = {}
+        for y in years:
+            missing = [c for c in codes if (c, y) not in cells]
+            if missing:
+                raise ValueError(f"{name}: missing area {missing} in {y}")
+            v = sum(cells[(c, y)] for c in codes)
+            if v < 20_000:
+                raise ValueError(f"{name} population out of range in {y}: {v}")
+            values[str(y)] = int(v)
+        items.append({"name": name, "values": values})
+    return {"title": "Population by region", "source": "Stats NZ",
+            "url": "https://explore.data.stats.govt.nz/", "projection": "Medium",
+            "baseYear": years[0], "years": years, "national": totals, "items": items}
+
 
 def validate(meta, series):
     if not series or len(series) < 2:
@@ -509,18 +592,27 @@ def main():
     except Exception as exc:  # keep the previous regions block
         errors.append(f"regions: {exc}")
 
+    population = old.get("population")
+    try:
+        population = fetch_population()
+    except Exception as exc:  # keep the previous population block
+        errors.append(f"population: {exc}")
+
     # Only treat it as an update if the numbers actually changed. This stops
     # a pointless commit and redeploy every day when nothing new was published.
     today = date.today().isoformat()
-    changed = out != old.get("indicators") or regions != old.get("regions")
+    changed = (out != old.get("indicators") or regions != old.get("regions")
+               or population != old.get("population"))
     result = {"updated": today if changed else old.get("updated", today),
               "placeholder": any(e.get("placeholder") for e in out),
               "indicators": out}
     if regions:
         result["regions"] = regions
+    if population:
+        result["population"] = population
     DATA_FILE.write_text(json.dumps(result, indent=2) + "\n")
     if changed:
-        bump_sitemap(today)
+        bump_sitemap(today, out)
 
     if errors:
         print("Problems:\n" + "\n".join(errors), file=sys.stderr)

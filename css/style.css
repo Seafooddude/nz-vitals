@@ -49,10 +49,12 @@ a:focus-visible { outline: 3px solid var(--black); outline-offset: 2px; }
 .tag { display: inline-block; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; border: 1px solid var(--grey); color: var(--grey); padding: 1px 6px; border-radius: 3px; margin-left: 8px; vertical-align: middle; font-weight: 400; }
 
 /* Key indicator tiles */
-.tiles { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.tile { background: var(--white); padding: 14px 16px; }
+.tiles { display: grid; grid-template-columns: repeat(6, 1fr); grid-auto-rows: 1fr; background: var(--white); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+/* Hairlines are drawn per tile (not as a grey gap), so a short last row stays white */
+.tile { display: flex; flex-direction: column; min-height: 140px; background: var(--white); padding: 14px 16px; box-shadow: inset 1px 1px 0 var(--line); margin: -1px 0 0 -1px; } /* each tile draws its own top/left line; the outer edge is clipped */
 .label { display: inline-block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--grey); border-bottom: 1px dotted var(--grey); cursor: help; }
-.tile-value { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.2; margin-top: 4px; }
+.tile-value { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.2; margin-top: 2px; }
+.tile-top { min-height: 2.5rem; }   /* room for a two-line label, so values line up across each row */
 .tile-value small { font-size: 0.8rem; font-weight: 400; color: var(--grey); letter-spacing: 0; }
 .tile-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; font-size: 0.75rem; color: var(--grey); }
 /* Changes: green up, red down (the direction, not a judgement of good or bad) */
@@ -119,7 +121,7 @@ a:focus-visible { outline: 3px solid var(--black); outline-offset: 2px; }
 
 /* Earnings by region */
 .seg { display: inline-flex; border: 1px solid var(--black); border-radius: 6px; overflow: hidden; margin: 0 0 14px; }
-.seg button { font: inherit; font-size: 0.85rem; background: var(--white); color: var(--black); border: 0; padding: 6px 14px; cursor: pointer; }
+.seg button { font: inherit; font-size: 0.85rem; background: var(--white); color: var(--black); border: 0; padding: 6px 14px; white-space: nowrap; cursor: pointer; }
 .seg button + button { border-left: 1px solid var(--black); }
 .seg button[aria-pressed="true"] { background: var(--blue); color: var(--white); }
 .seg button:focus-visible { outline: 3px solid var(--black); outline-offset: -3px; }
@@ -172,8 +174,11 @@ a:focus-visible { outline: 3px solid var(--black); outline-offset: 2px; }
 .prose h1 { font-size: 1.6rem; margin: 16px 0 0; letter-spacing: -0.02em; }
 .prose h2 { font-size: 1.1rem; margin-top: 32px; }
 
-/* Tablets: 3 tiles per row */
-@media (max-width: 900px) {
+/* Narrower screens: 4 tiles per row (3 rows), then 2 per row (6 rows), so the 12 tiles always fill every row */
+@media (max-width: 1100px) {
+  .tiles { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 700px) {
   .tiles { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -188,3 +193,46 @@ a:focus-visible { outline: 3px solid var(--black); outline-offset: 2px; }
   .qcard, .card { padding: 16px; }
   .source a, .site-footer a, .qlink, .nav a { padding: 6px 0; display: inline-block; } /* easier to tap */
 }
+
+/* Clickable tiles and indicator pages */
+a.tile { display: block; color: inherit; text-decoration: none; }
+a.tile:hover { background: #f4f8fc; }
+a.tile:focus-visible { outline: 3px solid var(--black); outline-offset: -3px; }
+.card h2 a { color: inherit; text-decoration: none; }
+.card h2 a:hover { color: var(--blue); text-decoration: underline; }
+
+.detail { padding-bottom: 32px; }
+.crumb { margin: 20px 0 0; font-size: 0.9rem; }
+.detail h1 { font-size: 1.8rem; letter-spacing: -0.02em; margin: 10px 0 6px; }
+.hero { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin: 8px 0 4px; }
+.big { font-size: 2.8rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; }
+.big small { font-size: 1rem; font-weight: 400; color: var(--grey); letter-spacing: 0; }
+.hero-meta { color: var(--grey); }
+.lede { margin: 6px 0 18px; max-width: 760px; }
+.bigchart { padding-bottom: 8px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 16px 0 8px; }
+.stat { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.stat .label { cursor: default; border-bottom: 0; }
+.stat b { display: block; font-size: 1.25rem; margin-top: 2px; letter-spacing: -0.02em; }
+.stat small { display: block; font-size: 0.75rem; color: var(--grey); }
+.about-ind p { max-width: 720px; margin: 0 0 8px; }
+.data-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.btn { font: inherit; font-size: 0.85rem; background: var(--white); color: var(--black); border: 1px solid var(--black); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+.btn:hover { background: #f2f7fb; }
+.btn:focus-visible { outline: 3px solid var(--black); outline-offset: 2px; }
+.dtable { width: 100%; max-width: 720px; border-collapse: collapse; font-size: 0.9rem; }
+.dtable th, .dtable td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.dtable th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--grey); font-weight: 400; }
+.dtable .num { text-align: right; }
+.pn { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 28px 0 0; padding-top: 16px; border-top: 1px solid var(--line); }
+.pn a { text-decoration: none; padding: 6px 0; }
+@media (max-width: 600px) {
+  .big { font-size: 2.3rem; }
+  .detail h1 { font-size: 1.5rem; }
+}
+
+/* Blue dot on a tile whose figure is newer than at the visitor's last visit */
+.newdot { display: inline-block; width: 8px; height: 8px; margin-left: 8px; border-radius: 50%; background: var(--blue); vertical-align: 2px; cursor: help; }
+
+/* Long switches (population years) shrink their padding on phones rather than overflow */
+@media (max-width: 480px) { .seg button { padding: 6px 9px; font-size: 0.8rem; } }
