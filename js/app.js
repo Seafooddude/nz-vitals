@@ -230,7 +230,7 @@
     if (ind.placeholder) {  // not connected yet: no figures, just the label
       el.className += " soon";
       el.innerHTML = '<div class="tile-top"><span class="label" title="' + esc(c.tip) + '">' + esc(c.label) + "</span></div>" +
-        '<div class="tile-value">–</div><span class="tag">Coming soon</span>';
+        '<div class="tile-value">–</div><span class="tag">Coming soon</span><span class="sr-only">' + esc(c.tip) + "</span>";
       return el;
     }
     var chg = c.change ? delta(ind, c.change) : null;
@@ -241,7 +241,7 @@
         (c.suffix ? " <small>" + esc(c.suffix) + "</small>" : "") + "</div>" +
       '<div class="tile-meta"><span>' + esc(fmtDate(latest(ind))) + "</span>" +
         (chg ? '<span class="chg ' + chg.dir + '">' + esc(chg.text) + " " + esc(c.changeNote || "") + "</span>" : "") + "</div>" +
-      (ind.placeholder ? '<span class="tag">Placeholder</span>' : "");
+      '<span class="sr-only">' + esc(c.tip) + "</span>";
     return el;
   }
 
@@ -508,8 +508,8 @@
           }).join("") + "</div>" +
         '<div class="rwrap' + (geo ? " withmap" : "") + '">' + map +
         '<div class="rlist">' + rows.map(function (i) {
-          return '<div class="rrow" tabindex="0" data-r="' + esc(i.name) + '">' +
-            '<span class="rname"><a href="' + esc(rurl(i.name)) + '" tabindex="-1">' + esc(i.name) + "</a></span>" +
+          return '<div class="rrow" data-r="' + esc(i.name) + '">' +
+            '<span class="rname"><a href="' + esc(rurl(i.name)) + '">' + esc(i.name) + "</a></span>" +
             '<span class="rtrack"><span class="rbar" style="width:' + Math.max(0, i.v / max * 100).toFixed(1) + '%"></span>' +
               (nat == null ? "" : '<span class="rnat" style="left:' + nat.toFixed(1) + '%"></span>') + "</span>" +
             '<span class="rval">' + esc(i.val) + "</span>" +
@@ -540,14 +540,14 @@
         el.addEventListener("pointerenter", function (e) { light(name); if (isPath) place(name, e.clientX, e.clientY); });
         el.addEventListener("pointermove", function (e) { if (isPath) place(name, e.clientX, e.clientY); });
         el.addEventListener("pointerleave", function () { light(null); if (mtip) mtip.className = "maptip"; });
-        el.addEventListener("focus", function () {
+        el.addEventListener(isPath ? "focus" : "focusin", function () {
           light(name);
           if (isPath) { var r = el.getBoundingClientRect(); place(name, r.left + r.width / 2, r.top + r.height / 2); }
         });
-        el.addEventListener("blur", function () { light(null); if (mtip) mtip.className = "maptip"; });
+        el.addEventListener(isPath ? "blur" : "focusout", function () { light(null); if (mtip) mtip.className = "maptip"; });
         // Click or press Enter to open the region's own page.
         el.addEventListener("click", function (e) { if (!e.target.closest("a")) location.href = rurl(name); });
-        el.addEventListener("keydown", function (e) {
+        if (isPath) el.addEventListener("keydown", function (e) {
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); location.href = rurl(name); }
         });
       });
