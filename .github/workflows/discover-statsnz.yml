@@ -1,0 +1,32 @@
+name: Discover Stats NZ dataflows
+
+# Run this by hand from the Actions tab. It prints the Stats NZ dataflows whose names mention wages, labour cost,
+# price indexes or tradables, with a sample of each one's data, so you can fill in data/statsnz_series.json.
+on:
+  workflow_dispatch:
+    inputs:
+      keywords:
+        description: "Optional space-separated keywords (leave empty for the defaults)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: List matching dataflows
+        env:
+          STATSNZ_API_KEY: ${{ secrets.STATSNZ_API_KEY }}
+          KEYWORDS: ${{ inputs.keywords }}
+        run: python scripts/discover_statsnz.py $KEYWORDS | tee discover.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: statsnz-dataflows
+          path: discover.txt
