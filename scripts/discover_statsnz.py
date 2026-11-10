@@ -47,7 +47,19 @@ def main(argv):
         sys.exit("Set STATSNZ_API_KEY first.")
     show_all = "--all" in argv
     words = [a.lower() for a in argv if not a.startswith("--")] or DEFAULT_WORDS
-    flows = parse_flows(get(BASE + "dataflow/STATSNZ?detail=allstubs"))
+    flows, errors = [], []
+    for path in ("dataflow/STATSNZ/all/latest?detail=allstubs", "dataflow/STATSNZ/all/latest", "dataflow/STATSNZ/all",
+                 "dataflow/STATSNZ?detail=allstubs", "dataflow/all/all/latest?detail=allstubs", "dataflow"):
+        try:
+            flows = parse_flows(get(BASE + path))
+            if flows:
+                print(f"(listing worked with: {path})")
+                break
+            errors.append(f"{path}: no dataflows in the reply")
+        except Exception as exc:
+            errors.append(f"{path}: {exc}")
+    if not flows:
+        sys.exit("Could not list dataflows:\n  " + "\n  ".join(errors))
     print(f"{len(flows)} dataflows found.\n")
     matches = [f for f in flows if show_all or any(w in f[2].lower() or w in f[0].lower() for w in words)]
     for fid, ver, name in matches:
