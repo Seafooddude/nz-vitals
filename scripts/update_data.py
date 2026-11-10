@@ -83,7 +83,8 @@ def http_get(url, headers=None):
         return resp.read()
 
 
-_RAW = {}  # url -> file bytes, so B1/B2 are downloaded once even if used twice
+_RAW = {}     # url -> file bytes of a live download (or test file), so B1/B2 are downloaded once even if used twice
+_FAILED = {}  # url -> why the download failed, so a blocked site is tried once per run, not once per series
 RAW_DIR = ROOT / "data" / "raw"  # fallback copies you upload by hand if downloads are blocked
 
 
@@ -91,25 +92,29 @@ def get_file(url, env_var, allow_raw=True):
     """Return an RBNZ spreadsheet as bytes: test file, else download, else data/raw copy.
 
     With allow_raw=False a failed download raises instead of using the repo copy, so the caller can try a backup source first.
+    The repo copy is never cached as if it were a download (that would hide the failure from the next series using the same file).
     """
     if url in _RAW:
         return _RAW[url]
     local = os.environ.get(env_var)
     if local:
-        raw = Path(local).read_bytes()
-    else:
-        try:
-            raw = http_get(url)
-            if not raw.startswith(b"PK"):  # .xlsx files are zip files
-                raise ValueError("response was not an Excel file")
-        except Exception as exc:
-            fallback = RAW_DIR / url.rsplit("/", 1)[-1]
-            if not allow_raw or not fallback.exists():
-                raise
-            print(f"WARNING: download failed ({exc}); using {fallback.name} from the repo.", file=sys.stderr)
-            raw = fallback.read_bytes()
-    _RAW[url] = raw
-    return raw
+        _RAW[url] = Path(local).read_bytes()
+        return _RAW[url]
+    try:
+        if url in _FAILED:
+            raise OSError(_FAILED[url])
+        raw = http_get(url)
+        if not raw.startswith(b"PK"):  # .xlsx files are zip files
+            raise ValueError("response was not an Excel file")
+        _RAW[url] = raw
+        return raw
+    except Exception as exc:
+        _FAILED[url] = str(exc)
+        fallback = RAW_DIR / url.rsplit("/", 1)[-1]
+        if not allow_raw or not fallback.exists():
+            raise
+        print(f"WARNING: download failed ({exc}); using {fallback.name} from the repo.", file=sys.stderr)
+        return fallback.read_bytes()
 
 
 def rbnz_points(url, env_var, series_id, allow_raw=True):
@@ -580,7 +585,7 @@ def ade_text(url=ADE_URL, fallback=ADE_FALLBACK, env_var="NZV_ADE_FILE"):
                        "User-Agent": "nz-vitals-data-bot/1.0"}
             text = http_get(url, headers).decode("utf-8-sig")
             if "OBS_VALUE" not in text.split("\n", 1)[0]:
-                raise ValueError("response was not SDMX-CSV")
+                raise ValueError("response was not SDMX-CSV; it began: " + text[:200].replace("\n", " ").strip())
             return text
         except Exception as exc:
             print(f"WARNING: Stats NZ API request failed ({exc}); using data/raw/{fallback.name}.",
