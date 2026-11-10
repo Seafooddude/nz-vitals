@@ -573,6 +573,36 @@ LIMITS = {"median_hourly": (10, 80), "median_weekly": (300, 4000), "people": (1,
           "average_hourly": (10, 100), "average_weekly": (300, 5000)}
 
 
+def sdmx_xml_to_csv(xml_text):
+    """Turn an SDMX 2.1 GenericData message (observations keyed by all dimensions) into CSV text."""
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(xml_text.encode("utf-8"))
+    rows, cols = [], []
+    for obs in root.iter():
+        if not obs.tag.endswith("}Obs"):
+            continue
+        row = {}
+        for child in obs:
+            tag = child.tag.rsplit("}", 1)[-1]
+            if tag == "ObsKey":
+                for v in child:
+                    row[v.get("id")] = v.get("value")
+            elif tag == "ObsValue":
+                row["OBS_VALUE"] = child.get("value")
+        for k in row:
+            if k not in cols and k != "OBS_VALUE":
+                cols.append(k)
+        rows.append(row)
+    if not rows:
+        raise ValueError("SDMX XML contained no observations")
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(cols + ["OBS_VALUE"])
+    for r in rows:
+        w.writerow([r.get(c, "") for c in cols] + [r.get("OBS_VALUE", "")])
+    return out.getvalue()
+
+
 def ade_text(url=ADE_URL, fallback=ADE_FALLBACK, env_var="NZV_ADE_FILE"):
     """CSV text: test file, else the Stats NZ API (if a key is set), else the data/raw copy."""
     local = os.environ.get(env_var)
@@ -584,6 +614,8 @@ def ade_text(url=ADE_URL, fallback=ADE_FALLBACK, env_var="NZV_ADE_FILE"):
             headers = {"Ocp-Apim-Subscription-Key": key, "Accept": "application/vnd.sdmx.data+csv",
                        "User-Agent": "nz-vitals-data-bot/1.0"}
             text = http_get(url, headers).decode("utf-8-sig")
+            if text.lstrip().startswith("<"):   # some dataflows answer in SDMX XML whatever Accept says
+                text = sdmx_xml_to_csv(text)
             if "OBS_VALUE" not in text.split("\n", 1)[0]:
                 raise ValueError("response was not SDMX-CSV; it began: " + text[:200].replace("\n", " ").strip())
             return text
