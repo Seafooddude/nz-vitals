@@ -1,0 +1,17 @@
+{
+  "_help": "Fill in 'dataflow' (and the filters) for wages and nontradables once you know them. Run the 'Discover Stats NZ dataflows' action to find them; see the README. While 'dataflow' is null the indicator stays a 'Coming soon' tile.",
+  "wages": {
+    "dataflow": null,
+    "version": "1.0",
+    "key": "all",
+    "filters": {},
+    "kind": "percent"
+  },
+  "nontradables": {
+    "dataflow": null,
+    "version": "1.0",
+    "key": "all",
+    "filters": {},
+    "kind": "percent"
+  }
+}

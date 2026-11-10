@@ -871,6 +871,8 @@
         '<div class="hero-meta">' + esc(fmtDate(last)) + (dPrev ? " · " + chgHtml(dPrev) + " " + esc(c.changeNote || "vs previous") : "") + "</div></div>" +
       '<p class="lede">' + esc(caption(ind)) + "</p>" +
       (cx ? '<p class="context">' + esc(cx.sentence) + "</p>" : "") +
+      (upcoming(ind.id).length ? '<p class="context">Next release: ' + esc(releaseWhen(upcoming(ind.id)[0])) +
+        (inDays(upcoming(ind.id)[0]) ? " (" + esc(inDays(upcoming(ind.id)[0])) + ")" : "") + " · " + esc(upcoming(ind.id)[0].name) + ".</p>" : "") +
       '<div class="trend-bar"><p class="hint">Hover over (or tap) the chart to see the values. Grey bands mark recessions (two or more quarters in a row of falling real GDP).</p>' +
         '<div class="seg" id="range" role="group" aria-label="Chart time range">' +
           '<button type="button" data-y="1" aria-pressed="false">1Y</button>' +
@@ -936,7 +938,7 @@
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       })
-      .then(function (data) { findRecessions(data); renderDetail(data); setupRange(); })
+      .then(function (data) { return loadReleases().then(function () { findRecessions(data); renderDetail(data); setupRange(); }); })
       .catch(function (err) {
         $("detail").innerHTML = '<p class="status">Could not load data (' + esc(err.message) + ").</p>";
       });
@@ -1156,6 +1158,53 @@
       });
   }
 
+  // ---- release calendar (data/releases.json, edited by hand) --------------------------------
+  // Dates marked "confirmed" come from the Reserve Bank's published schedule; the rest are expected dates and are labelled so.
+
+  var releases = { items: [], calendars: [] };
+
+  function loadReleases() {
+    return fetch("data/releases.json", { cache: "no-cache" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { if (j && j.items) releases = j; })
+      .catch(function () { /* optional: pages work without it */ });
+  }
+
+  function todayIso() {
+    var d = new Date();
+    return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+  }
+  function daysUntil(iso) {
+    var a = iso.split("-"), b = todayIso().split("-");
+    return Math.round((Date.UTC(+a[0], +a[1] - 1, +a[2]) - Date.UTC(+b[0], +b[1] - 1, +b[2])) / 864e5);
+  }
+  function upcoming(id) {
+    return (releases.items || []).filter(function (r) { return r.date >= todayIso() && (!id || (r.ids || []).indexOf(id) >= 0); })
+      .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+  }
+  // "Wed 9 Dec 2026" for confirmed dates, "Mid Dec 2026 (expected)" for the rest.
+  function releaseWhen(r) {
+    if (r.confirmed === false) return (r.label || isoToText(r.date)) + " (expected)";
+    var d = new Date(r.date + "T00:00:00Z");
+    return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()] + " " + isoToText(r.date);
+  }
+  function inDays(r) {
+    if (r.confirmed === false) return "";
+    var n = daysUntil(r.date);
+    return n === 0 ? "today" : n === 1 ? "tomorrow" : "in " + n + " days";
+  }
+  function releasesHtml(limit) {
+    var list = upcoming().slice(0, limit || 5);
+    if (!list.length) return "";
+    var rows = list.map(function (r) {
+      return '<li class="rel"><span class="rel-date">' + esc(releaseWhen(r)) + (inDays(r) ? ' <small>' + esc(inDays(r)) + "</small>" : "") +
+        '</span><span class="rel-name">' + esc(r.name) + ' <small>' + esc(r.body || "") + "</small></span></li>";
+    }).join("");
+    var links = (releases.calendars || []).map(function (c) { return '<a href="' + esc(c.url) + '">' + esc(c.name) + "</a>"; }).join(" · ");
+    return '<ul class="rels">' + rows + "</ul>" +
+      '<p class="hint">Dates marked "expected" are estimates from past release patterns, so check the official calendars: ' + links + ".</p>";
+  }
+
   // ---- briefing page (briefing.html): one printable page of every connected indicator ----------
 
   function renderBriefing(data) {
@@ -1188,6 +1237,7 @@
       if (rows) html += '<h2 class="group-title">' + esc(g.title) + '</h2><table class="dtable brief"><thead><tr><th scope="col">Indicator</th><th scope="col" class="num">Latest</th>' +
         '<th scope="col">Period</th><th scope="col" class="num">Change</th><th scope="col">Context</th></tr></thead><tbody>' + rows + "</tbody></table>";
     });
+    if (upcoming().length) html += '<h2 class="group-title">Coming up</h2>' + releasesHtml(5);
     html += '<h2 class="group-title">In four questions</h2><div class="qgrid" id="bq"></div>';
     if (soon.length) html += '<p class="hint">Not yet connected to official data: ' + esc(soon.join(", ")) + ".</p>";
     html += '<p class="source">Sources: ' + Object.keys(sources).map(function (n) { return '<a href="' + esc(sources[n]) + '">' + esc(n) + "</a>"; }).join(" · ") +
@@ -1204,7 +1254,7 @@
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       })
-      .then(renderBriefing)
+      .then(function (data) { return loadReleases().then(function () { renderBriefing(data); }); })
       .catch(function (err) {
         $("briefing").innerHTML = '<p class="status">Could not load data (' + esc(err.message) + ").</p>";
       });
@@ -1217,6 +1267,7 @@
   if ($("rpage")) { startRegion(); return; }
   setupRange();
   Promise.all([
+    loadReleases(),
     fetch("data/data.json", { cache: "no-cache" }).then(function (r) {
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
@@ -1225,7 +1276,7 @@
     fetch("data/nz-regions.json").then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
   ])
     .then(function (res) {
-      var data = res[0], geo = res[1];
+      var data = res[1], geo = res[2];
       var by = {};
       data.indicators.forEach(function (ind) { by[ind.id] = ind; });
 
@@ -1235,6 +1286,10 @@
       // Everything else is still charted under Trends and has its own page.
       KEY_TILES.forEach(function (id) { if (by[id]) $("tiles").appendChild(tile(by[id])); });
       QUESTIONS.forEach(function (q) { $("qgrid").appendChild(question(q, by)); });
+      if ($("releases") && upcoming().length) {
+        $("releases-body").innerHTML = releasesHtml(4);
+        $("releases").hidden = false;
+      }
       renderRegions(data.regions, $("regions-body"), geo);
       // Population is optional: the section stays hidden if the data file doesn't have it yet.
       if (data.population && $("population")) {

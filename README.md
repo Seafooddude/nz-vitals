@@ -14,10 +14,13 @@ css/style.css         all styling (Helvetica, white / black / Knicks blue), incl
 js/app.js             renders cards + SVG charts from data/data.json
 js/menu.js            hamburger menu for the header on phones
 data/data.json        the main data file the site reads
+data/releases.json    upcoming release dates shown under "Coming Up" (edited by hand)
+data/statsnz_series.json  which Stats NZ dataflow and filters give wage growth and non-tradables inflation
 data/nz-regions.json  simplified outlines of the 12 regions, for the earnings map (from Natural Earth, public domain)
 data/raw/             fallback copies of the source files (RBNZ spreadsheets, Stats NZ earnings and population CSVs)
 favicon.svg, og-image.png, sitemap.xml, robots.txt, _headers   site extras
 scripts/update_data.py  fetch + validate + write data.json and sitemap.xml
+scripts/discover_statsnz.py  lists Stats NZ dataflows so you can fill in statsnz_series.json
 .github/workflows/update.yml  daily cron that runs the script and commits
 ```
 
@@ -35,10 +38,23 @@ scripts/update_data.py  fetch + validate + write data.json and sitemap.xml
 
 Most indicators are connected. Still to do:
 
-1. Connect the four items marked "Coming soon": wage growth (Stats NZ Labour Cost Index), non-tradables inflation (Stats NZ),
-   NZX 50 and the GDT dairy price. Check the licence terms for NZX and GDT first.
+1. Wage growth and non-tradables inflation: run the "Discover Stats NZ dataflows" action, then fill in `data/statsnz_series.json`
+   (see "Wage growth and non-tradables" below). NZX 50 and the GDT dairy price are held back for licensing reasons: both are
+   commercial data, so they need permission from NZX / Global Dairy Trade, or should be shown as links rather than figures.
 2. Keep the indicator notes in `about.html` in step with what is actually connected.
 3. Review attribution and licence wording for each source.
+
+## Reserve Bank data: backup sources
+
+The Reserve Bank's site often refuses automated downloads. For each Reserve Bank series the script tries, in order:
+1. the Reserve Bank download;
+2. a backup source: BIS policy rate (OCR), OECD 10-year yield via FRED, monthly (`IRLTLT01NZM156N`), Federal Reserve NZD/USD via FRED
+   (`DEXUSNZ`). The TWI has no like-for-like backup. The FRED backups need `FRED_API_KEY`;
+3. the copy in `data/raw/`.
+Whichever of steps 2 and 3 has the newer figure is used. When a backup is used, the tile's source line says so. **The three backup
+sources have not been tested against the live services**, and the BIS and FRED series codes are unverified: a failure shows as a WARNING in
+the Actions log and the script just moves to the next source, so it is safe, but check the log after the first runs
+(look for "NOTE: ... using the backup source"). Backup data is monthly or lagged, so it will look older than the daily Reserve Bank figures.
 
 ## If the RBNZ blocks the automatic download
 
@@ -71,6 +87,26 @@ in-page links such as `#regions` from hiding behind the header, so change those 
   print rules at the end of `css/style.css` hide the header and footer.
 - Tiles and pages show the period of the latest reading and the date the site data was last refreshed. Official release dates are not
   stored, so they are not shown.
+
+## Wage growth and non-tradables (Stats NZ)
+
+Both come from the Aotearoa Data Explorer, using the same `STATSNZ_API_KEY`. The dataflow IDs and the dimension codes that pick out the
+right series are not known yet, so `data/statsnz_series.json` has `"dataflow": null` and the tiles stay "Coming soon".
+1. GitHub > Actions > "Discover Stats NZ dataflows" > Run workflow. Open the run's log (or download the `statsnz-dataflows` artifact).
+   It lists dataflows whose names mention labour cost, price indexes, wages or tradables, with a few rows of each one's data.
+2. Choose the dataflow and the rows you want (for wages, the headline Labour Cost Index annual % change; for non-tradables, the
+   annual % change in non-tradables prices). Put the dataflow ID in `statsnz_series.json`, and in `filters` give each dimension column
+   and the code to keep, for example `{"MEASURE_XYZ": "ANN_PC", "SECTOR_XYZ": "ALL"}`. Use `"kind": "index"` if the dataflow only has an
+   index level (the script then works out the annual % change).
+3. Run "Update data". If the filters leave more than one value for a period the script stops with an error rather than guess.
+
+## Release calendar
+
+`data/releases.json` feeds the "Coming Up" section, the briefing page and the "Next release" line on indicator pages. It is edited by hand.
+Reserve Bank dates are confirmed (2 Sep, 28 Oct, 9 Dec 2026 and 17 Feb 2027 are its published OCR dates). Stats NZ dates are
+marked `"confirmed": false` and shown as "(expected)" because I could not verify them: replace each one with the real date from the
+Stats NZ release calendar and set `"confirmed": true` (then drop the `label`). Past dates drop off automatically. The `ids` list says
+which indicator pages show that release as their next one.
 
 ## Items marked "Coming soon"
 

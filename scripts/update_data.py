@@ -87,8 +87,11 @@ _RAW = {}  # url -> file bytes, so B1/B2 are downloaded once even if used twice
 RAW_DIR = ROOT / "data" / "raw"  # fallback copies you upload by hand if downloads are blocked
 
 
-def get_file(url, env_var):
-    """Return an RBNZ spreadsheet as bytes: test file, else download, else data/raw copy."""
+def get_file(url, env_var, allow_raw=True):
+    """Return an RBNZ spreadsheet as bytes: test file, else download, else data/raw copy.
+
+    With allow_raw=False a failed download raises instead of using the repo copy, so the caller can try a backup source first.
+    """
     if url in _RAW:
         return _RAW[url]
     local = os.environ.get(env_var)
@@ -101,7 +104,7 @@ def get_file(url, env_var):
                 raise ValueError("response was not an Excel file")
         except Exception as exc:
             fallback = RAW_DIR / url.rsplit("/", 1)[-1]
-            if not fallback.exists():
+            if not allow_raw or not fallback.exists():
                 raise
             print(f"WARNING: download failed ({exc}); using {fallback.name} from the repo.", file=sys.stderr)
             raw = fallback.read_bytes()
@@ -109,12 +112,12 @@ def get_file(url, env_var):
     return raw
 
 
-def rbnz_points(url, env_var, series_id):
+def rbnz_points(url, env_var, series_id, allow_raw=True):
     """Return [(datetime, float), ...] for one series in an RBNZ 'Data' sheet.
 
     The column is found by its Series Id, so a reordered file doesn't break us.
     """
-    raw = get_file(url, env_var)
+    raw = get_file(url, env_var, allow_raw)
     wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
     rows = wb["Data"].iter_rows(values_only=True)
 
@@ -203,6 +206,81 @@ def fetch_cpi(quarters=HIST_Q):
     return out
 
 
+# ---- Backup sources for the Reserve Bank series ----
+# The Reserve Bank's site often refuses automated downloads. The order is: the Reserve Bank download, then a backup
+# source (below), then the copy in data/raw/. Whichever of the last two has the newer figure wins, and when the backup
+# is used the tile's source line says so. None of these backups has been run against the live services yet:
+# a failure is logged as a WARNING and the script moves on to the next source.
+BIS_URL = "https://stats.bis.org/api/v2/data/dataflow/BIS/WS_CBPOL/1.0/D.NZ?format=csv"
+SOURCE_NOTES = {}   # indicator id -> (source, url) when a backup source supplied the data
+
+
+def _fred_daily_or_monthly(series_id):
+    """FRED points as [(datetime, value)]. FRED dates a monthly value by the 1st of the month; we use the month end."""
+    out = []
+    for d, v in fred_points(series_id, raw=False):
+        dt = datetime.strptime(d, "%Y-%m-%d")
+        if series_id.endswith("M156N"):
+            nxt = date(dt.year + (dt.month == 12), dt.month % 12 + 1, 1)
+            dt = datetime.combine(nxt - date.resolution, datetime.min.time())
+        out.append((dt, v))
+    return out
+
+
+def alt_bond10():
+    return _fred_daily_or_monthly("IRLTLT01NZM156N")   # OECD 10-year bond yield, monthly
+
+
+def alt_nzdusd():
+    return _fred_daily_or_monthly("DEXUSNZ")           # US dollars per NZ dollar, daily (Federal Reserve H.10)
+
+
+def alt_ocr():
+    """BIS central bank policy rate for New Zealand (the OCR), daily."""
+    rows = csv.DictReader(io.StringIO(http_get(BIS_URL, {"User-Agent": "nz-vitals-data-bot/1.0"}).decode("utf-8-sig")))
+    out = []
+    for r in rows:
+        t, v = (r.get("TIME_PERIOD") or "").strip(), (r.get("OBS_VALUE") or "").strip()
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", t) and v not in ("", "NaN"):
+            out.append((datetime.strptime(t, "%Y-%m-%d"), float(v)))
+    if len(out) < 100:
+        raise ValueError("BIS response had too few rows")
+    return sorted(out)
+
+
+ALT_LABELS = {
+    "ocr": ("Bank for International Settlements (Reserve Bank download unavailable)", "https://data.bis.org/topics/CBPOL"),
+    "bond10": ("OECD via FRED, monthly (Reserve Bank download unavailable)", "https://fred.stlouisfed.org/series/IRLTLT01NZM156N"),
+    "nzdusd": ("Federal Reserve via FRED (Reserve Bank download unavailable)", "https://fred.stlouisfed.org/series/DEXUSNZ"),
+}
+
+
+def rbnz_series(url, env_var, series_id, ind_id, alt=None):
+    """[(datetime, value)] for one Reserve Bank series, with the backup chain described above."""
+    try:
+        return rbnz_points(url, env_var, series_id, allow_raw=False)
+    except Exception as exc:
+        print(f"WARNING: Reserve Bank download failed for {ind_id} ({exc}).", file=sys.stderr)
+    alt_pts = raw_pts = None
+    if alt:
+        try:
+            alt_pts = alt()
+        except Exception as exc:
+            print(f"WARNING: backup source for {ind_id} failed ({type(exc).__name__}: {exc}).", file=sys.stderr)
+    try:
+        raw_pts = rbnz_points(url, env_var, series_id)   # now allowed to use the data/raw copy
+    except Exception as exc:
+        print(f"WARNING: no usable repo copy for {ind_id} ({exc}).", file=sys.stderr)
+    if raw_pts and (not alt_pts or raw_pts[-1][0] >= alt_pts[-1][0]):
+        print(f"NOTE: {ind_id}: using the copy in data/raw/ (latest {raw_pts[-1][0].date()}).", file=sys.stderr)
+        return raw_pts
+    if alt_pts:
+        print(f"NOTE: {ind_id}: using the backup source (latest {alt_pts[-1][0].date()}).", file=sys.stderr)
+        SOURCE_NOTES[ind_id] = ALT_LABELS[ind_id]
+        return alt_pts
+    raise ValueError(f"{ind_id}: no source available (Reserve Bank, backup and repo copy all failed)")
+
+
 def fetch_ocr(max_changes=60):
     """OCR as a short series: each of the last few changes, plus the latest day.
 
@@ -210,7 +288,7 @@ def fetch_ocr(max_changes=60):
     so we keep the change points. That also lets the caption say "unchanged
     since <date of last change>" when the rate has held.
     """
-    points = rbnz_points(B2_URL, "NZV_B2_FILE", OCR_SERIES_ID)
+    points = rbnz_series(B2_URL, "NZV_B2_FILE", OCR_SERIES_ID, "ocr", alt_ocr)
     changes = [points[0]] + [cur for prev, cur in zip(points, points[1:]) if cur[1] != prev[1]]
     chosen = changes[-max_changes:]
     if chosen[-1][0] != points[-1][0]:
@@ -230,15 +308,16 @@ def month_ends(points, months=HIST_M):
 
 
 def fetch_nzdusd():
-    return month_ends(rbnz_points(B1_URL, "NZV_B1_FILE", NZDUSD_SERIES_ID))
+    return month_ends(rbnz_series(B1_URL, "NZV_B1_FILE", NZDUSD_SERIES_ID, "nzdusd", alt_nzdusd))
 
 
 def fetch_twi():
-    return month_ends(rbnz_points(B1_URL, "NZV_B1_FILE", TWI_SERIES_ID))
+    # No like-for-like backup exists (other trade-weighted indexes use a different currency basket).
+    return month_ends(rbnz_series(B1_URL, "NZV_B1_FILE", TWI_SERIES_ID, "twi"))
 
 
 def fetch_bond10():
-    return month_ends(rbnz_points(B2_URL, "NZV_B2_FILE", BOND10_SERIES_ID))
+    return month_ends(rbnz_series(B2_URL, "NZV_B2_FILE", BOND10_SERIES_ID, "bond10", alt_bond10))
 
 
 # ---- GDP growth and unemployment: OECD series distributed by FRED (St. Louis Fed) ----
@@ -254,8 +333,11 @@ def _fred_csv(text):
     return [(r[0], float(r[1])) for r in rows if len(r) > 1 and r[1] not in ("", ".")]
 
 
-def fred_points(series_id):
-    """[(date, value)]: test file, else the FRED API (if a key is set), else data/raw copy."""
+def fred_points(series_id, raw=True):
+    """[(date, value)]: test file, else the FRED API (if a key is set), else data/raw copy.
+
+    With raw=False there is no repo copy: if the API cannot be used this raises (used for backup series).
+    """
     local = os.environ.get("NZV_FRED_" + series_id)
     if local:
         return _fred_csv(Path(local).read_text(encoding="utf-8-sig"))
@@ -273,7 +355,10 @@ def fred_points(series_id):
             print(f"WARNING: FRED request for {series_id} failed ({type(exc).__name__} "
                   f"{getattr(exc, 'code', '')}); using data/raw/{series_id}.csv.", file=sys.stderr)
     else:
-        print("NOTE: FRED_API_KEY is not set; using the copies in data/raw/.", file=sys.stderr)
+        if raw:
+            print("NOTE: FRED_API_KEY is not set; using the copies in data/raw/.", file=sys.stderr)
+    if not raw:
+        raise ValueError(f"FRED series {series_id} is not available (no key, or the request failed)")
     return _fred_csv((RAW_DIR / f"{series_id}.csv").read_text(encoding="utf-8-sig"))
 
 
@@ -388,7 +473,77 @@ def fetch_current_account(quarters=HIST_Q):
             for q in sorted(out)[-quarters:]]
 
 
-FETCHERS = {"cpi": fetch_cpi, "houses": fetch_houses, "current_account": fetch_current_account, "consumer_conf": fetch_consumer_conf, "business_conf": fetch_business_conf, "gdp": fetch_gdp, "unemployment": fetch_unemployment,
+# ---- Wage growth and non-tradables inflation: Stats NZ Aotearoa Data Explorer ----
+# These need the exact dataflow and filters, set in data/statsnz_series.json (see scripts/discover_statsnz.py and the README).
+# Until a dataflow is filled in, the indicator stays a "Coming soon" placeholder. The fetcher refuses to guess:
+# if the filters leave more than one value for a period it raises an error instead of picking one.
+STATSNZ_CFG = ROOT / "data" / "statsnz_series.json"
+ADE_DATA = "https://api.data.stats.govt.nz/rest/data/"
+
+
+def _period(p):
+    """'2026-Q3', '2026Q3' or a quarter-end month like '2026-09' -> ((year, quarter), 'YYYY-MM-DD', '2026 Q3')."""
+    p = p.strip()
+    m = re.fullmatch(r"(\d{4})-?Q([1-4])", p)
+    if m:
+        y, q = int(m.group(1)), int(m.group(2))
+    else:
+        m = re.fullmatch(r"(\d{4})-(\d{2})", p)
+        if not m or int(m.group(2)) not in (3, 6, 9, 12):
+            raise ValueError(f"unrecognised period {p!r}")
+        y, q = int(m.group(1)), int(m.group(2)) // 3
+    return (y, q), f"{y}-{QUARTER_END[q]}", f"{y} Q{q}"
+
+
+def parse_statsnz_series(text, cfg, quarters=HIST_Q):
+    """SDMX-CSV -> [{"date", "label", "value"}] for one quarterly series picked out by cfg["filters"].
+
+    cfg["kind"] is "percent" (use the values as they are) or "index" (turn an index into annual % change).
+    """
+    reader = csv.DictReader(io.StringIO(text))
+    cols = reader.fieldnames or []
+    c_per = next((c for c in cols if c.strip().startswith(("TIME_PERIOD", "PERIOD"))), None)
+    if c_per is None:
+        raise ValueError("no period column in the response (columns: " + ", ".join(cols)[:200] + ")")
+    c_val = _find(cols, "OBS_VALUE")
+    filt = [(_find(cols, dim), str(code)) for dim, code in (cfg.get("filters") or {}).items()]
+    values, info = {}, {}
+    for row in reader:
+        if any(_code(row[c]) != code for c, code in filt) or not (row[c_val] or "").strip():
+            continue
+        yq, d, label = _period(row[c_per])
+        if yq in values:
+            raise ValueError(f"more than one value for {label}: the filters in statsnz_series.json do not pick a single series")
+        values[yq], info[yq] = float(row[c_val]), (d, label)
+    if len(values) < 8:
+        raise ValueError(f"only {len(values)} periods matched the filters")
+    out = []
+    for yq in sorted(values):
+        v = values[yq]
+        if cfg.get("kind", "percent") == "index":
+            prior = values.get((yq[0] - 1, yq[1]))   # same quarter a year earlier
+            if prior is None:
+                continue
+            v = (v / prior - 1) * 100
+        out.append({"date": info[yq][0], "label": info[yq][1], "value": round(v, 1)})
+    return out[-quarters:]
+
+
+def fetch_statsnz(ind_id):
+    try:
+        cfg = (json.loads(STATSNZ_CFG.read_text()) if STATSNZ_CFG.exists() else {}).get(ind_id) or {}
+    except ValueError as exc:
+        raise ValueError(f"data/statsnz_series.json is not valid JSON ({exc})")
+    if not cfg.get("dataflow"):
+        raise NotImplementedError(ind_id)
+    url = (f"{ADE_DATA}STATSNZ,{cfg['dataflow']},{cfg.get('version', '1.0')}/{cfg.get('key', 'all')}"
+           "?dimensionAtObservation=AllDimensions")
+    text = ade_text(url, RAW_DIR / f"statsnz_{ind_id}.csv", "NZV_STATSNZ_" + ind_id.upper())
+    return parse_statsnz_series(text, cfg)
+
+
+FETCHERS = {"wages": lambda: fetch_statsnz("wages"), "nontradables": lambda: fetch_statsnz("nontradables"),
+            "cpi": fetch_cpi, "houses": fetch_houses, "current_account": fetch_current_account, "consumer_conf": fetch_consumer_conf, "business_conf": fetch_business_conf, "gdp": fetch_gdp, "unemployment": fetch_unemployment,
             "ocr": fetch_ocr, "nzdusd": fetch_nzdusd,
             "twi": fetch_twi, "bond10": fetch_bond10}
 
@@ -590,6 +745,8 @@ def main():
             series = fetcher()
             validate(meta, series)
             entry["series"] = series
+            if meta["id"] in SOURCE_NOTES:   # a backup source supplied this series: say so on the page
+                entry["source"], entry["url"] = SOURCE_NOTES[meta["id"]]
         except Exception as exc:  # keep last good data for this indicator
             if not isinstance(exc, NotImplementedError):
                 errors.append(f"{meta['id']}: {exc}")

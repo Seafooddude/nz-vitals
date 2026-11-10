@@ -1,0 +1,14 @@
+{
+  "updated": "2026-11-11",
+  "calendars": [
+    {"name": "Stats NZ release calendar", "url": "https://www.stats.govt.nz/release-calendar"},
+    {"name": "Reserve Bank OCR and policy dates", "url": "https://www.rbnz.govt.nz/hub/news/2025/10/monetary-policy-and-financial-stability-report-dates-august-2026-to-february-2027"}
+  ],
+  "items": [
+    {"date": "2026-12-09", "name": "OCR decision and Monetary Policy Statement", "body": "Reserve Bank of New Zealand", "ids": ["ocr", "bond10", "nzdusd", "twi"], "confirmed": true},
+    {"date": "2026-12-16", "label": "Mid Dec 2026", "name": "GDP, September 2026 quarter", "body": "Stats NZ", "ids": ["gdp"], "confirmed": false},
+    {"date": "2027-01-22", "label": "Late Jan 2027", "name": "Consumers price index, December 2026 quarter", "body": "Stats NZ", "ids": ["cpi", "nontradables"], "confirmed": false},
+    {"date": "2027-02-03", "label": "Early Feb 2027", "name": "Labour market statistics, December 2026 quarter", "body": "Stats NZ", "ids": ["unemployment", "wages"], "confirmed": false},
+    {"date": "2027-02-17", "name": "OCR decision and Monetary Policy Statement", "body": "Reserve Bank of New Zealand", "ids": ["ocr", "bond10", "nzdusd", "twi"], "confirmed": true}
+  ]
+}
