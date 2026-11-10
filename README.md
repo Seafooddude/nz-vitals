@@ -9,8 +9,7 @@ index.html            dashboard page
 about.html            methodology and indicator notes
 indicator.html        detail page for one indicator (?id=...)
 region.html           detail page for one region (?r=...)
-css/style.css         all styling (Helvetica, white / black / Knicks blue)
-css/header.css        sticky, compact header (two rows on phones); loaded after style.css
+css/style.css         all styling (Helvetica, white / black / Knicks blue), including the sticky header
 js/app.js             renders cards + SVG charts from data/data.json
 data/data.json        the main data file the site reads
 data/nz-regions.json  simplified outlines of the 12 regions, for the earnings map (from Natural Earth, public domain)
@@ -53,10 +52,9 @@ If the data goes more than 10 days without updating, the site shows a "may have 
 
 ## Header
 
-`css/header.css` makes the header sticky (it stays at the top while scrolling) and, on screens up to 720px wide, lays it out as
-two compact rows: logo and "As of" date on top, a swipeable one-line nav underneath. It also sets `scroll-padding-top` so that
-in-page links such as `#regions` are not hidden behind the header. If you change the header's height, adjust that value to match.
-Each page links it after `css/style.css`.
+The header (`.topbar` in `css/style.css`) is sticky, so it stays at the top while scrolling. On screens up to 600px wide it becomes
+two compact rows: logo and "As of" date on top, a swipeable one-line nav underneath. `html { scroll-padding-top }` (72px, and 92px on
+phones) keeps in-page links such as `#regions` from hiding behind it, so change those values if you change the header's height.
 
 ## Items marked "Coming soon"
 
