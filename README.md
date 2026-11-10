@@ -8,9 +8,11 @@ A one-page, minimalist dashboard of New Zealand economic indicators.
 index.html            dashboard page
 about.html            methodology and indicator notes
 indicator.html        detail page for one indicator (?id=...)
+briefing.html         one-page printable briefing of every connected indicator (Print / save as PDF)
 region.html           detail page for one region (?r=...)
 css/style.css         all styling (Helvetica, white / black / Knicks blue), including the sticky header
 js/app.js             renders cards + SVG charts from data/data.json
+js/menu.js            hamburger menu for the header on phones
 data/data.json        the main data file the site reads
 data/nz-regions.json  simplified outlines of the 12 regions, for the earnings map (from Natural Earth, public domain)
 data/raw/             fallback copies of the source files (RBNZ spreadsheets, Stats NZ earnings and population CSVs)
@@ -35,9 +37,8 @@ Most indicators are connected. Still to do:
 
 1. Connect the four items marked "Coming soon": wage growth (Stats NZ Labour Cost Index), non-tradables inflation (Stats NZ),
    NZX 50 and the GDT dairy price. Check the licence terms for NZX and GDT first.
-2. The "Draft site" banner on the dashboard disappears once no indicator is flagged as a placeholder.
-3. Keep the indicator notes in `about.html` in step with what is actually connected.
-4. Review attribution and licence wording for each source.
+2. Keep the indicator notes in `about.html` in step with what is actually connected.
+3. Review attribution and licence wording for each source.
 
 ## If the RBNZ blocks the automatic download
 
@@ -52,9 +53,24 @@ If the data goes more than 10 days without updating, the site shows a "may have 
 
 ## Header
 
-The header (`.topbar` in `css/style.css`) is sticky, so it stays at the top while scrolling. On screens up to 600px wide it becomes
-two compact rows: logo and "As of" date on top, a swipeable one-line nav underneath. `html { scroll-padding-top }` (72px, and 92px on
-phones) keeps in-page links such as `#regions` from hiding behind it, so change those values if you change the header's height.
+The header (`.topbar` in `css/style.css`) is sticky, so it stays at the top while scrolling. On screens up to 600px wide it shows the
+logo, the "As of" date and a hamburger button; tapping the button drops the nav links down (`js/menu.js` adds the button and handles
+open/close). If JavaScript is off, the nav just wraps onto a second row. `html { scroll-padding-top }` (72px, and 64px on phones) keeps
+in-page links such as `#regions` from hiding behind the header, so change those values if you change the header's height.
+
+## Context, recession bands, chart images and the briefing
+
+- **"Highest since..." notes** (tiles, indicator pages, briefing) come from `context()` in `js/app.js`. It finds the last time the series was
+  above or below the latest value and reports the longer look-back, or "Highest in N+ years" when the latest reading is the extreme of
+  all the history held (about ten years, see `HIST_Q` / `HIST_M`). Nothing is shown if the look-back is under a year.
+- **Recession bands** (grey) are worked out from the real GDP series in `data.json` by `findRecessions()`: two or more quarters in a row of
+  falling real GDP. Nothing is hard-coded, so they update with the data. Region charts do not use them.
+- **Chart images:** "Save chart" on each trend card and "Download chart (PNG)" on indicator and region pages call `saveChart()`, which
+  saves the chart as currently shown (time range included) with a title, caption and source line. It needs no libraries.
+- **Briefing:** `briefing.html` is built by `renderBriefing()`. The "Print or save as PDF" button opens the browser's print dialog, and the
+  print rules at the end of `css/style.css` hide the header and footer.
+- Tiles and pages show the period of the latest reading and the date the site data was last refreshed. Official release dates are not
+  stored, so they are not shown.
 
 ## Items marked "Coming soon"
 

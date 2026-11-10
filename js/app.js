@@ -233,7 +233,7 @@
         '<div class="tile-value">–</div><span class="tag">Coming soon</span><span class="sr-only">' + esc(c.tip) + "</span>";
       return el;
     }
-    var chg = c.change ? delta(ind, c.change) : null;
+    var chg = c.change ? delta(ind, c.change) : null, cx = context(ind);
     el.innerHTML =
       '<div class="tile-top"><span class="label" title="' + esc(c.tip) + '">' + esc(c.label) + "</span>" +
       (isNew(ind) ? '<span class="newdot" title="New reading since your last visit" role="img" aria-label="New reading since your last visit"></span>' : "") + "</div>" +
@@ -241,6 +241,7 @@
         (c.suffix ? " <small>" + esc(c.suffix) + "</small>" : "") + "</div>" +
       '<div class="tile-meta"><span>' + esc(fmtDate(latest(ind))) + "</span>" +
         (chg ? '<span class="chg ' + chg.dir + '">' + esc(chg.text) + " " + esc(c.changeNote || "") + "</span>" : "") + "</div>" +
+      (cx ? '<div class="tile-note">' + esc(cx.text) + "</div>" : "") +
       '<span class="sr-only">' + esc(c.tip) + "</span>";
     return el;
   }
@@ -272,8 +273,115 @@
       (ind.placeholder ? '<p class="soon-text">Not connected to official data yet.</p>'
         : '<div class="chart-host"></div><p class="summary">' + esc(caption(ind)) + "</p>") +
       '<p class="source">' + (ind.placeholder ? "Planned source: " : "Source: ") + '<a href="' + esc(ind.url) + '">' + esc(ind.source) + "</a>" +
-        (ind.placeholder ? "" : ' · <a href="indicator.html?id=' + encodeURIComponent(ind.id) + '">Full history →</a>') + "</p>";
+        (ind.placeholder ? "" : " · Latest: " + esc(fmtDate(latest(ind))) + ' · <a href="indicator.html?id=' + encodeURIComponent(ind.id) + '">Full history →</a>' +
+          ' · <button type="button" class="linkbtn" data-save>Save chart</button>') + "</p>";
     return el;
+  }
+
+  // ---- context notes ("highest since...") and recession bands --------------------------
+
+  // "Mar 2019", or the point's own label ("2022 Q3").
+  function monthYear(p) { return p.label || (MON[parseInt(p.date.slice(5, 7), 10) - 1] + " " + p.date.slice(0, 4)); }
+
+  // Finds the last time the series was above (or below) its latest value and reports the longer look-back.
+  // Returns null when that is less than a year ago, since a short look-back says little.
+  function context(ind) {
+    var s = (ind.series || []).filter(function (p) { return !p.synthetic; });
+    if (s.length < 8) return null;
+    var last = s[s.length - 1], best = null, dayMs = 864e5;
+    ["Highest", "Lowest"].forEach(function (kind) {
+      var hit = null;
+      for (var i = s.length - 2; i >= 0; i--) {
+        if (kind === "Highest" ? s[i].value > last.value : s[i].value < last.value) { hit = s[i]; break; }
+      }
+      var from = hit ? hit.date : s[0].date;
+      if (!best || from < best.from) best = { kind: kind, hit: hit, from: from };
+    });
+    if (Date.parse(last.date) - Date.parse(best.from) < 365 * dayMs) return null;
+    var low = best.kind.toLowerCase();
+    if (best.hit) {
+      return { text: best.kind + " since " + monthYear(best.hit),
+               sentence: "This is the " + low + " reading since " + monthYear(best.hit) + "." };
+    }
+    var yrs = Math.floor((Date.parse(last.date) - Date.parse(s[0].date)) / (365.25 * dayMs));
+    return { text: best.kind + " in " + yrs + "+ years",
+             sentence: "This is the " + low + " reading in the " + yrs + "+ years of data held here (back to " + fmtDate(s[0]) + ")." };
+  }
+
+  // Recession bands are worked out from the real GDP series: two or more quarters in a row of falling output.
+  var recessions = [];
+  function findRecessions(data) {
+    recessions = [];
+    var g = data.indicators.filter(function (i) { return i.id === "gdp"; })[0];
+    if (!g || !g.series || g.series.length < 3) return;
+    var q = g.series, i = 0;
+    while (i < q.length) {
+      if (q[i].value < 0) {
+        var j = i;
+        while (j + 1 < q.length && q[j + 1].value < 0) j++;
+        if (j > i) {
+          var d0 = new Date(Date.parse(q[i].date));
+          d0.setUTCDate(1); d0.setUTCMonth(d0.getUTCMonth() - 2);
+          recessions.push({ from: i > 0 ? q[i - 1].date : d0.toISOString().slice(0, 10), to: q[j].date });
+        }
+        i = j + 1;
+      } else i++;
+    }
+  }
+
+  // Save a chart as a PNG, exactly as currently shown (time range included), with a title and source line.
+  var SVG_PROPS = ["fill", "stroke", "stroke-width", "stroke-dasharray", "stroke-linejoin", "stroke-opacity", "fill-opacity", "opacity", "font-family", "font-size", "font-weight"];
+  function wrapLines(g, text, maxW, maxLines) {
+    var words = String(text).split(" "), lines = [], cur = "";
+    words.forEach(function (w) {
+      var t = cur ? cur + " " + w : w;
+      if (g.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t;
+    });
+    if (cur) lines.push(cur);
+    if (lines.length > maxLines) { lines = lines.slice(0, maxLines); lines[maxLines - 1] = lines[maxLines - 1].replace(/\s*\S*$/, "") + "…"; }
+    return lines;
+  }
+  function saveChart(host, ind, sourceText) {
+    var svg = host && host.querySelector("svg");
+    if (!svg) return;
+    var clone = svg.cloneNode(true), a = svg.querySelectorAll("*"), b = clone.querySelectorAll("*"), drop = [], i;
+    for (i = 0; i < a.length; i++) {
+      if (a[i].getAttribute("visibility") === "hidden") { drop.push(b[i]); continue; }
+      var cs = getComputedStyle(a[i]);
+      for (var k = 0; k < SVG_PROPS.length; k++) b[i].style.setProperty(SVG_PROPS[k], cs.getPropertyValue(SVG_PROPS[k]));
+    }
+    drop.forEach(function (n) { n.remove(); });
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.removeAttribute("tabindex");
+    var w = parseInt(svg.getAttribute("width"), 10), h = parseInt(svg.getAttribute("height"), 10);
+    var sub = ind.compare ? "Solid line: " + ind.name + ". Dashed line: " + ind.compare.name + "." : caption(ind);
+    var foot = ["Source: " + sourceText + ". NZ Vitals, nz-vitals.pages.dev"];
+    if (svg.querySelector(".rec")) foot.push("Grey bands mark recessions (two or more quarters in a row of falling real GDP).");
+    var img = new Image();
+    img.onload = function () {
+      var S = 2, pad = 16, W = w + pad * 2, cv = document.createElement("canvas"), g = cv.getContext("2d");
+      g.font = "12px Helvetica, Arial, sans-serif";
+      var subLines = wrapLines(g, sub, W - pad * 2, 2), headH = 48 + subLines.length * 17, footH = 14 + foot.length * 16;
+      cv.width = W * S; cv.height = (headH + h + footH) * S;
+      g = cv.getContext("2d");
+      g.scale(S, S);
+      g.fillStyle = "#fff"; g.fillRect(0, 0, W, headH + h + footH);
+      g.textBaseline = "top"; g.fillStyle = "#111"; g.font = "700 17px Helvetica, Arial, sans-serif";
+      g.fillText(wrapLines(g, ind.name, W - pad * 2, 1)[0], pad, 14);
+      g.fillStyle = "#6b6b6b"; g.font = "12px Helvetica, Arial, sans-serif";
+      subLines.forEach(function (ln, n) { g.fillText(ln, pad, 40 + n * 17); });
+      g.drawImage(img, pad, headH, w, h);
+      g.font = "11px Helvetica, Arial, sans-serif";
+      foot.forEach(function (ln, n) { g.fillText(ln, pad, headH + h + 8 + n * 16); });
+      cv.toBlob(function (blob) {
+        if (!blob) return;
+        var link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "nz-vitals-" + ind.id.replace(/_/g, "-") + ".png";
+        document.body.appendChild(link); link.click(); link.remove();
+      }, "image/png");
+    };
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(clone));
   }
 
   // ---- chart with axes, target band and hover tooltip -------------------------
@@ -364,6 +472,13 @@
     var X = function (v) { return L + (v - t[0]) / span * (W - L - R); };
     var Y = function (v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); };
     var xs = t.map(X), ys = vals.map(Y);
+    var rec = "";
+    if (!/^region_/.test(ind.id)) {
+      recessions.forEach(function (r) {
+        var a = Math.max(Date.parse(r.from), t[0]), b = Math.min(Date.parse(r.to), t[t.length - 1]);
+        if (b > a) rec += '<rect class="rec" x="' + X(a).toFixed(1) + '" y="' + T + '" width="' + (X(b) - X(a)).toFixed(1) + '" height="' + (H - T - B) + '"/>';
+      });
+    }
 
     // Rates like the OCR hold until the next decision, so draw them as steps.
     var d = "M" + xs[0].toFixed(1) + " " + ys[0].toFixed(1);
@@ -408,7 +523,7 @@
 
     host.innerHTML =
       '<svg class="chart" viewBox="0 0 ' + W + " " + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="' + esc(ind.name) + " trend chart. " + esc(caption(ind)) + ' Use the arrow keys to read each value.">' +
-      grid + band + zero + ref +
+      rec + grid + band + zero + ref +
       '<line class="axis" x1="' + L + '" y1="' + (H - B) + '" x2="' + (W - R) + '" y2="' + (H - B) + '"/>' + xt +
       (d2 ? '<path class="line2" d="' + d2 + '"/>' : "") +
       '<path class="line" d="' + d + '"/>' + dots +
@@ -680,7 +795,11 @@
         var card = trendCard(ind);
         gg.appendChild(card);
         var host = card.querySelector(".chart-host");
-        if (host) mountChart(host, ind);
+        if (host) {
+          mountChart(host, ind);
+          var sb = card.querySelector("[data-save]");
+          if (sb) sb.addEventListener("click", function () { saveChart(host, ind, ind.source); });
+        }
       });
       grid.appendChild(sec);
     });
@@ -745,12 +864,14 @@
     }
 
     var s = ind.series, last = latest(ind), step = c.step;
-    var dPrev = deltaVs(ind, s[s.length - 2], "prev"), ya = yearAgo(s), dYear = ya ? deltaVs(ind, ya, "prev") : null;
+    var dPrev = deltaVs(ind, s[s.length - 2], "prev"), ya = yearAgo(s), dYear = ya ? deltaVs(ind, ya, "prev") : null, cx = context(ind);
+    src = src.replace(/<\/p>$/, " · Latest reading: " + esc(fmtDate(last)) + (data.updated ? " · Site data refreshed " + esc(isoToText(data.updated)) : "") + "</p>");
     root.innerHTML = head +
       '<div class="hero"><div class="big">' + esc(fmt(last.value, ind.unit)) + (c.suffix ? " <small>" + esc(c.suffix) + "</small>" : "") + "</div>" +
         '<div class="hero-meta">' + esc(fmtDate(last)) + (dPrev ? " · " + chgHtml(dPrev) + " " + esc(c.changeNote || "vs previous") : "") + "</div></div>" +
       '<p class="lede">' + esc(caption(ind)) + "</p>" +
-      '<div class="trend-bar"><p class="hint">Hover over (or tap) the chart to see the values.</p>' +
+      (cx ? '<p class="context">' + esc(cx.sentence) + "</p>" : "") +
+      '<div class="trend-bar"><p class="hint">Hover over (or tap) the chart to see the values. Grey bands mark recessions (two or more quarters in a row of falling real GDP).</p>' +
         '<div class="seg" id="range" role="group" aria-label="Chart time range">' +
           '<button type="button" data-y="1" aria-pressed="false">1Y</button>' +
           '<button type="button" data-y="5" aria-pressed="false">5Y</button>' +
@@ -759,10 +880,12 @@
       '<div class="stats" id="stats"></div>' +
       about +
       '<section><h2 class="section-title">Data</h2><div class="data-actions"><button type="button" class="btn" id="csv">Download CSV</button>' +
+        '<button type="button" class="btn" id="png">Download chart (PNG)</button>' +
         '<button type="button" class="btn" id="more"></button></div><div id="dtable"></div></section>' +
       src + pn;
 
     mountChart(root.querySelector(".chart-host"), ind);
+    $("png").addEventListener("click", function () { saveChart(root.querySelector(".chart-host"), ind, ind.source); });
 
     // Stats for the chosen time range
     function stats() {
@@ -813,7 +936,7 @@
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       })
-      .then(function (data) { renderDetail(data); setupRange(); })
+      .then(function (data) { findRecessions(data); renderDetail(data); setupRange(); })
       .catch(function (err) {
         $("detail").innerHTML = '<p class="status">Could not load data (' + esc(err.message) + ").</p>";
       });
@@ -943,6 +1066,7 @@
         " scenario at five-year steps. They are projections, not forecasts.</p></section>" : "") +
 
       '<section><h2 class="section-title">Data</h2><div class="data-actions"><button type="button" class="btn" id="csv">Download earnings CSV</button>' +
+        '<button type="button" class="btn" id="png">Download earnings chart (PNG)</button>' +
         '<button type="button" class="btn" id="more"></button></div><div id="dtable"></div>' +
         (popInd ? '<div id="ptable"></div>' : "") + "</section>" +
 
@@ -960,6 +1084,7 @@
     mountChart($("ch-earn"), earn);
     mountChart($("ch-rel"), relInd);
     if (popInd) mountChart($("ch-pop"), popInd);
+    $("png").addEventListener("click", function () { saveChart($("ch-earn"), earn, "Stats NZ"); });
 
     function relHint() {
       $("relhint").textContent = "100 means the same as New Zealand overall. Above 100, " + name + " is higher; below 100, it is lower. Based on median " +
@@ -1031,8 +1156,63 @@
       });
   }
 
+  // ---- briefing page (briefing.html): one printable page of every connected indicator ----------
+
+  function renderBriefing(data) {
+    var root = $("briefing"), by = {}, sources = {}, soon = [];
+    data.indicators.forEach(function (i) { by[i.id] = i; });
+    var real = data.indicators.filter(function (i) { return !i.placeholder && i.series.length; });
+    var asof = real.map(function (i) { return latest(i).date; }).sort().pop();
+    var used = {};
+    var groups = GROUPS.map(function (g) {
+      return { title: g.title, inds: g.ids.filter(function (id) { return by[id]; }).map(function (id) { used[id] = 1; return by[id]; }) };
+    });
+    var rest = data.indicators.filter(function (i) { return !used[i.id]; });
+    if (rest.length) groups.push({ title: "More", inds: rest });
+
+    var html = '<h1>NZ economy briefing</h1>' +
+      '<p class="lede">Newest figure: ' + esc(asof ? isoToText(asof) : "–") + (data.updated ? " · Site data refreshed " + esc(isoToText(data.updated)) : "") +
+      ". Figures are the latest readings from official sources.</p>" +
+      '<div class="data-actions no-print"><button type="button" class="btn" id="print">Print or save as PDF</button></div>';
+    groups.forEach(function (g) {
+      var rows = "";
+      g.inds.forEach(function (ind) {
+        if (ind.placeholder || !ind.series.length) { soon.push(ind.name); return; }
+        var c = CFG[ind.id] || {}, chg = c.change ? delta(ind, c.change) : null, cx = context(ind), l = latest(ind);
+        sources[ind.source] = ind.url;
+        rows += "<tr><td><a href=\"indicator.html?id=" + encodeURIComponent(ind.id) + '">' + esc(c.label || ind.name) + "</a></td>" +
+          '<td class="num"><b>' + esc(fmt(l.value, ind.unit)) + "</b>" + (c.suffix ? " " + esc(c.suffix) : "") + "</td>" +
+          "<td>" + esc(fmtDate(l)) + '</td><td class="num">' + (chg ? chgHtml(chg) + " <small>" + esc(c.changeNote || "") + "</small>" : "–") + "</td>" +
+          "<td>" + (cx ? esc(cx.text) : "–") + "</td></tr>";
+      });
+      if (rows) html += '<h2 class="group-title">' + esc(g.title) + '</h2><table class="dtable brief"><thead><tr><th scope="col">Indicator</th><th scope="col" class="num">Latest</th>' +
+        '<th scope="col">Period</th><th scope="col" class="num">Change</th><th scope="col">Context</th></tr></thead><tbody>' + rows + "</tbody></table>";
+    });
+    html += '<h2 class="group-title">In four questions</h2><div class="qgrid" id="bq"></div>';
+    if (soon.length) html += '<p class="hint">Not yet connected to official data: ' + esc(soon.join(", ")) + ".</p>";
+    html += '<p class="source">Sources: ' + Object.keys(sources).map(function (n) { return '<a href="' + esc(sources[n]) + '">' + esc(n) + "</a>"; }).join(" · ") +
+      ". Context notes compare each reading with the history held here, which is about ten years for most series. " +
+      "This page is for general information only and is not financial advice. nz-vitals.pages.dev</p>";
+    root.innerHTML = html;
+    QUESTIONS.forEach(function (q) { $("bq").appendChild(question(q, by)); });
+    $("print").addEventListener("click", function () { window.print(); });
+  }
+
+  function startBriefing() {
+    fetch("data/data.json", { cache: "no-cache" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(renderBriefing)
+      .catch(function (err) {
+        $("briefing").innerHTML = '<p class="status">Could not load data (' + esc(err.message) + ").</p>";
+      });
+  }
+
   // ---- start ----------------------------------------------------------------
 
+  if ($("briefing")) { startBriefing(); return; }
   if ($("detail")) { startDetail(); return; }
   if ($("rpage")) { startRegion(); return; }
   setupRange();
@@ -1049,6 +1229,7 @@
       var by = {};
       data.indicators.forEach(function (ind) { by[ind.id] = ind; });
 
+      findRecessions(data);
       initSeen(data);
       // The tile grid shows a fixed, even set of 12 (2 rows of 6, 3 of 4 or 6 of 2) so every row is full.
       // Everything else is still charted under Trends and has its own page.
@@ -1074,7 +1255,6 @@
           ". Automatic updates may have stopped.";
         $("stale").hidden = false;
       }
-      $("notice").hidden = !data.placeholder;
       $("status").remove();
     })
     .catch(function (err) {

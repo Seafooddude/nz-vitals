@@ -13,6 +13,12 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://nz-vitals.pages.dev/briefing.html</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://nz-vitals.pages.dev/indicator.html?id=gdp</loc>
     <lastmod>2026-06-30</lastmod>
     <changefreq>weekly</changefreq>
@@ -45,12 +51,6 @@
   <url>
     <loc>https://nz-vitals.pages.dev/indicator.html?id=business_conf</loc>
     <lastmod>2026-09-30</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://nz-vitals.pages.dev/indicator.html?id=current_account</loc>
-    <lastmod>2026-06-30</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>

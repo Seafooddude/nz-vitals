@@ -50,9 +50,6 @@
   <main id="main" class="wrap">
     <h1 class="sr-only">NZ Vitals: New Zealand economy dashboard</h1>
     <p id="status" class="status">Loading data…</p>
-    <div id="notice" class="notice" hidden>
-      Draft site: greyed-out items marked "Coming soon" are not connected to official data yet.
-    </div>
     <div id="stale" class="notice warn" role="status" hidden></div>
 
     <section id="key-indicators">
@@ -80,7 +77,7 @@
     <section id="trends">
       <h2 class="section-title">Trends</h2>
       <div class="trend-bar">
-        <p class="hint">Hover over (or tap) a chart to see the values.</p>
+        <p class="hint">Hover over (or tap) a chart to see the values. Grey bands mark recessions (two or more quarters in a row of falling real GDP).</p>
         <div class="seg" id="range" role="group" aria-label="Chart time range">
           <button type="button" data-y="1" aria-pressed="false">1Y</button>
           <button type="button" data-y="5" aria-pressed="true">5Y</button>
@@ -97,10 +94,11 @@
   <footer class="site-footer">
     <div class="wrap">
       <p>Data: Reserve Bank of New Zealand, Stats NZ and the OECD (via FRED). Last updated: <span id="updated">–</span>.</p>
-      <p><a href="about.html">About &amp; methodology</a></p>
+      <p><a href="about.html">About &amp; methodology</a> · <a href="briefing.html">Printable briefing</a></p>
     </div>
   </footer>
 
   <script src="js/app.js"></script>
+  <script src="js/menu.js"></script>
 </body>
 </html>

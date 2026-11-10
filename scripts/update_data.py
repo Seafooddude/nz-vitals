@@ -56,6 +56,7 @@ def bump_sitemap(today, indicators=(), regions=()):
                 "    <priority>%s</priority>\n  </url>\n" % (loc, mod, freq, prio))
 
     body = url(SITE, today, "daily", "1.0") + url(SITE + "about.html", about_mod, "monthly", "0.5")
+    body += url(SITE + "briefing.html", today, "daily", "0.6")
     for ind in indicators:
         if ind.get("placeholder") or not ind.get("series"):
             continue
