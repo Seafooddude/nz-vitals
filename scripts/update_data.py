@@ -18,6 +18,7 @@ import json
 import os
 import re
 import sys
+import urllib.parse
 import urllib.request
 from datetime import date, datetime
 from pathlib import Path
@@ -41,7 +42,7 @@ BOND10_SERIES_ID = "INM.DG110.NZZCF"  # Govt bond closing yield, 10 year, %pa
 SITE = "https://nz-vitals.pages.dev/"
 
 
-def bump_sitemap(today, indicators=()):
+def bump_sitemap(today, indicators=(), regions=()):
     """Rewrite sitemap.xml: home page (lastmod = today), the about page (lastmod kept),
     and one entry per connected indicator's detail page."""
     about_mod = today
@@ -59,6 +60,8 @@ def bump_sitemap(today, indicators=()):
         if ind.get("placeholder") or not ind.get("series"):
             continue
         body += url(SITE + "indicator.html?id=" + ind["id"], ind["series"][-1]["date"], "weekly", "0.7")
+    for name in regions:
+        body += url(SITE + "region.html?r=" + urllib.parse.quote(name, safe=""), today, "monthly", "0.6")
     SITEMAP_FILE.write_text('<?xml version="1.0" encoding="UTF-8"?>\n'
                             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + body + "</urlset>\n")
 
@@ -403,8 +406,10 @@ REGION_NAMES = {
     "10": "Canterbury", "11": "Otago", "12": "Southland",
     "98": "New Zealand",
 }
-MEASURES = {"MED_HOUR_INC": "median_hourly", "MED_WEEK_INC": "median_weekly", "NO_PEOPLE": "people"}
-LIMITS = {"median_hourly": (10, 80), "median_weekly": (300, 4000), "people": (1, 3000)}
+MEASURES = {"MED_HOUR_INC": "median_hourly", "MED_WEEK_INC": "median_weekly", "NO_PEOPLE": "people",
+            "AV_HOUR_INC": "average_hourly", "AV_WEEK_INC": "average_weekly"}
+LIMITS = {"median_hourly": (10, 80), "median_weekly": (300, 4000), "people": (1, 3000),
+          "average_hourly": (10, 100), "average_weekly": (300, 5000)}
 
 
 def ade_text(url=ADE_URL, fallback=ADE_FALLBACK, env_var="NZV_ADE_FILE"):
@@ -482,9 +487,18 @@ def fetch_regions():
             national = entry
         else:
             items.append(dict(entry, name=name))
+    # Full history for the region pages: one list per measure, oldest year first, for every region and for
+    # New Zealand overall. A year missing for one cell is stored as null.
+    history = {"years": [int(y) for y in years], "regions": {}}
+    for code, name in REGION_NAMES.items():
+        history["regions"][name] = {m: [cells.get((y, code, m)) for y in years] for m in MEASURES.values()}
+        for m, vals in history["regions"][name].items():
+            lo, hi = LIMITS[m]
+            if any(v is not None and not lo <= v <= hi for v in vals):
+                raise ValueError(f"{name} {m}: a historical value is out of range")
     return {"title": "Earnings by region", "source": "Stats NZ",
             "url": "https://explore.data.stats.govt.nz/", "latest": latest, "previous": previous,
-            "periodLabel": f"June {latest}", "national": national, "items": items}
+            "periodLabel": f"June {latest}", "national": national, "items": items, "history": history}
 
 # ---- Population by region: Stats NZ subnational population projections (POPPR_SUB_014) ----
 # Medium projection, both sexes, all ages, every area and year. The base year is 30 June 2023;
@@ -612,7 +626,7 @@ def main():
         result["population"] = population
     DATA_FILE.write_text(json.dumps(result, indent=2) + "\n")
     if changed:
-        bump_sitemap(today, out)
+        bump_sitemap(today, out, [i["name"] for i in (regions or {}).get("items", [])])
 
     if errors:
         print("Problems:\n" + "\n".join(errors), file=sys.stderr)

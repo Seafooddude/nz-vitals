@@ -111,3 +111,11 @@ medium scenario, both sexes, all ages) through the same API key as the earnings 
 reads `data/raw/POPPR_SUB_014.csv`. The 16 regional councils are merged into the 12 map regions (`POP_GROUPS`), and the update
 fails loudly if the regions stop adding up to the national total. The base year (2023) is the newest figure in this dataset; later years are
 projections at 5-year steps. The section hides itself if `data.json` has no `population` block.
+
+## Region pages
+
+Clicking a region on either map, or in either list, opens `region.html?r=<region name>` (for example `region.html?r=Auckland`).
+`renderRegion()` in `js/app.js` builds the page from `data.json`: the region's earnings against New Zealand since 1998 (median
+hourly or weekly, with a 5Y / 10Y / Max switch), the gap to New Zealand over time, the population base year and projections,
+ranks among the 12 regions, a table and a CSV download. The history comes from the `history` block that `fetch_regions()` writes
+under `regions` in `data.json`. The update script lists every region page in `sitemap.xml`.

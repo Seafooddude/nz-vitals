@@ -236,3 +236,24 @@ a.tile:focus-visible { outline: 3px solid var(--black); outline-offset: -3px; }
 
 /* Long switches (population years) shrink their padding on phones rather than overflow */
 @media (max-width: 480px) { .seg button { padding: 6px 9px; font-size: 0.8rem; } }
+
+/* Second comparison line and its legend (region pages) */
+.chart .line2 { fill: none; stroke: #8a8a8a; stroke-width: 1.75; stroke-dasharray: 5 3; stroke-linejoin: round; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 6px 0 0 40px; font-size: 0.75rem; color: var(--grey); }
+.legend .lg { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--blue); margin-right: 6px; vertical-align: middle; }
+.legend .lg.b { border-top: 2px dashed #8a8a8a; }
+
+/* Region pages and links into them */
+.rname a { color: inherit; text-decoration: none; }
+.rrow:hover .rname a, .rrow.on .rname a, .rrow:focus .rname a { text-decoration: underline; }
+.rrow { cursor: pointer; }
+.rtip .go, .maptip .go { display: block; margin-top: 3px; font-weight: 600; opacity: 1; color: #9fd0ff; }
+.ctrl { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 4px 0 12px; }
+.ctrl .seg { margin: 0; }
+
+/* Region page: full rows of stat cards (8 = 2 rows of 4, 6 = 2 rows of 3; 2 across on phones) */
+.stats.s4 { grid-template-columns: repeat(4, 1fr); }
+.stats.s3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 700px) { .stats.s4, .stats.s3 { grid-template-columns: repeat(2, 1fr); } }
+/* A note under a chart card needs some air */
+.card.bigchart + .hint { margin-top: 10px; }

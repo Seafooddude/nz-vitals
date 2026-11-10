@@ -28,6 +28,7 @@
            tip: "Quarterly balance of New Zealand's trade, investment income and transfers with the world, in NZ$ billion. A deficit means the country is borrowing from abroad to fund spending." },
     consumer_conf: { label: "Consumer confidence", change: "prev", changeNote: "vs prev. month", ref: 100, refLabel: "Long-run average",
            tip: "OECD composite index of how households feel about the economy and their finances. 100 is the long-run average; above 100 is more upbeat than usual." },
+    region_rel: { ref: 100, refLabel: "New Zealand = 100" },
     business_conf: { label: "Business confidence", change: "prev", changeNote: "vs prev. month", ref: 100, refLabel: "Long-run average",
            tip: "OECD composite index of firms' views on output, orders and the outlook. 100 is the long-run average; above 100 is more upbeat than usual." },
     bond10: { label: "10-year govt bond", change: "ytd", changeNote: "YTD",
@@ -128,6 +129,10 @@
   function fmt(v, unit) {
     if (unit === "NZD/USD") return Number(v).toFixed(4);
     if (unit === "US$/t") return "US$" + Math.round(v).toLocaleString("en-NZ");
+    if (unit === "NZ$/h") return "$" + Number(v).toFixed(2);
+    if (unit === "NZ$/wk") return "$" + Math.round(v).toLocaleString("en-NZ");
+    if (unit === "people") return Math.round(v).toLocaleString("en-NZ");
+    if (unit === "000") return Math.round(v * 1000).toLocaleString("en-NZ");
     if (unit === "index") return v >= 1000 ? Math.round(v).toLocaleString("en-NZ") : Number(v).toFixed(1);
     var n = Number(v).toFixed(2).replace(/0$/, ""); // 2.75, 2.5, 5.0
     return unit === "%" ? n + "%" : n;
@@ -275,8 +280,9 @@
 
   // The slice of the series to show for the chosen time range.
   function windowed(ind, step) {
+    if (ind.noWindow) return ind.series;   // e.g. projections, which always show every year
     var s = ind.series, out = s;
-    if (rangeYears) {
+    if (rangeYears && !ind.fullRange) {
       var last = s[s.length - 1].date;
       var cut = (parseInt(last.slice(0, 4), 10) - rangeYears) + last.slice(4);
       out = s.filter(function (p) { return p.date >= cut; });
@@ -300,12 +306,28 @@
   function tickText(v, unit, step) {
     var dec = Math.max(0, Math.ceil(-Math.log(step) / Math.LN10 - 1e-9));
     var n = Math.abs(v) >= 1000 ? Math.round(v).toLocaleString("en-NZ") : v.toFixed(dec);
-    return unit === "%" ? n + "%" : unit === "US$/t" ? "US$" + n : n;
+    if (unit === "people") return v >= 1e6 ? (v / 1e6).toFixed(step >= 1e6 ? 0 : step >= 1e5 ? 1 : 2) + "m" : v >= 1e3 ? Math.round(v / 1e3) + "k" : String(Math.round(v));
+    if (unit === "000") return Math.round(v) + "k";
+    return unit === "%" ? n + "%" : unit === "US$/t" ? "US$" + n : (unit === "NZ$/h" || unit === "NZ$/wk") ? "$" + n : n;
   }
 
   // Date ticks for the x axis: whole years for long spans, otherwise evenly spaced months.
-  function xTicks(t0, t1) {
+  function xTicks(t0, t1, pts) {
     var out = [], YR = 365.25 * 864e5;
+    // Annual series (one point a year, all on the same day, e.g. years to June): put each tick on a real
+    // data point and label its year, counting back from the newest, so labels never drift from the dots.
+    if (pts && pts.length >= 2) {
+      var md0 = new Date(pts[0]).getUTCMonth() + "-" + new Date(pts[0]).getUTCDate(), annual = true;
+      for (var j = 0; j < pts.length; j++) {
+        var dj = new Date(pts[j]);
+        if (dj.getUTCMonth() + "-" + dj.getUTCDate() !== md0 || (j > 0 && pts[j] - pts[j - 1] < 300 * 864e5)) { annual = false; break; }
+      }
+      if (annual) {
+        var kk = Math.max(1, Math.ceil(pts.length / 6));
+        for (var q = pts.length - 1; q >= 0; q -= kk) out.unshift({ t: pts[q], text: String(new Date(pts[q]).getUTCFullYear()) });
+        return out;
+      }
+    }
     if (t1 - t0 > 2 * YR) {
       var y0 = new Date(t0).getUTCFullYear() + 1, y1 = new Date(t1).getUTCFullYear();
       var k = Math.max(1, Math.ceil((y1 - y0 + 1) / 6));
@@ -322,11 +344,18 @@
   function drawChart(host, ind) {
     var cfg = CFG[ind.id] || {}, step = cfg.step;
     var s = windowed(ind, step);
-    var W = Math.max(host.clientWidth, 220), H = parseInt(host.getAttribute("data-h"), 10) || 200, L = 40, R = 12, T = 14, B = 26;
+    var W = Math.max(host.clientWidth, 220), H = parseInt(host.getAttribute("data-h"), 10) || 200, L = (ind.unit === "NZ$/wk" || ind.unit === "people") ? 50 : 40, R = 12, T = 14, B = 26;
     var t = s.map(function (p) { return Date.parse(p.date); });
     var span = (t[t.length - 1] - t[0]) || 1;
     var vals = s.map(function (p) { return p.value; });
     var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    // An optional second line (e.g. New Zealand overall next to a region), matched by date.
+    var cmap = null;
+    if (ind.compare) {
+      cmap = {};
+      ind.compare.series.forEach(function (p) { cmap[p.date] = p.value; });
+      s.forEach(function (p) { var v = cmap[p.date]; if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } });
+    }
     if (cfg.band) { lo = Math.min(lo, cfg.band[0]); hi = Math.max(hi, cfg.band[1]); }
     if (cfg.ref != null) { lo = Math.min(lo, cfg.ref); hi = Math.max(hi, cfg.ref); }
     var pad = (hi - lo) * 0.12 || 1;
@@ -341,6 +370,13 @@
     for (var i = 1; i < s.length; i++) {
       if (step) d += " L" + xs[i].toFixed(1) + " " + ys[i - 1].toFixed(1);
       d += " L" + xs[i].toFixed(1) + " " + ys[i].toFixed(1);
+    }
+    var d2 = "";
+    if (cmap) {
+      s.forEach(function (p, k) {
+        var v = cmap[p.date];
+        if (v != null) d2 += (d2 ? " L" : "M") + xs[k].toFixed(1) + " " + Y(v).toFixed(1);
+      });
     }
     var dots = xs.map(function (x, k) {
       var last = k === xs.length - 1;
@@ -364,7 +400,7 @@
       ref = '<line class="ref" x1="' + L + '" x2="' + (W - R) + '" y1="' + ry.toFixed(1) + '" y2="' + ry.toFixed(1) + '"/>' +
             (cfg.refLabel ? '<text class="reft" x="' + (W - R - 4) + '" y="' + (cfg.band ? Y(cfg.band[0]) + 12 : ry - 4).toFixed(1) + '" text-anchor="end">' + esc(cfg.refLabel) + "</text>" : "");
     }
-    var xt = xTicks(t[0], t[t.length - 1]).map(function (k) {
+    var xt = xTicks(t[0], t[t.length - 1], t).map(function (k) {
       var x = X(k.t), a = x < L + 16 ? "start" : x > W - R - 16 ? "end" : "middle";
       return '<line class="tick" x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + (H - B) + '" y2="' + (H - B + 4) + '"/>' +
              '<text x="' + x.toFixed(1) + '" y="' + (H - 7) + '" text-anchor="' + a + '">' + esc(k.text) + "</text>";
@@ -374,10 +410,12 @@
       '<svg class="chart" viewBox="0 0 ' + W + " " + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="' + esc(ind.name) + " trend chart. " + esc(caption(ind)) + ' Use the arrow keys to read each value.">' +
       grid + band + zero + ref +
       '<line class="axis" x1="' + L + '" y1="' + (H - B) + '" x2="' + (W - R) + '" y2="' + (H - B) + '"/>' + xt +
+      (d2 ? '<path class="line2" d="' + d2 + '"/>' : "") +
       '<path class="line" d="' + d + '"/>' + dots +
       '<line class="hline" y1="' + T + '" y2="' + (H - B) + '" visibility="hidden"/>' +
       '<circle class="hdot" r="5" visibility="hidden"/>' +
-      '</svg><div class="tip" role="status"></div>';
+      '</svg><div class="tip" role="status"></div>' +
+      (cmap ? '<div class="legend"><span><i class="lg a"></i>' + esc(ind.name) + '</span><span><i class="lg b"></i>' + esc(ind.compare.name) + "</span></div>" : "");
 
     var svg = host.querySelector("svg"), hl = svg.querySelector(".hline"), hd = svg.querySelector(".hdot"), tip = host.querySelector(".tip");
     var cur = s.length - 1;
@@ -391,7 +429,8 @@
       cur = k;
       hl.setAttribute("x1", xs[k]); hl.setAttribute("x2", xs[k]); hl.setAttribute("visibility", "visible");
       hd.setAttribute("cx", xs[k]); hd.setAttribute("cy", ys[k]); hd.setAttribute("visibility", "visible");
-      tip.innerHTML = "<span>" + esc(fmtDate(s[k])) + "</span><strong>" + esc(fmt(s[k].value, ind.unit)) + "</strong>";
+      tip.innerHTML = "<span>" + esc(fmtDate(s[k])) + "</span><strong>" + esc(fmt(s[k].value, ind.unit)) + "</strong>" +
+        (cmap && cmap[s[k].date] != null ? "<span>" + esc(ind.compare.name) + " " + esc(fmt(cmap[s[k].date], ind.unit)) + "</span>" : "");
       var below = ys[k] < 56;
       tip.style.left = Math.min(Math.max(xs[k], 56), W - 56) + "px";
       tip.style.top = (below ? ys[k] + 12 : ys[k] - 12) + "px";
@@ -432,6 +471,7 @@
 
   // ---- regional map + bars (shared by earnings and population) --------------------
 
+  var GO = '<span class="go">Click for full history →</span>';
   var RAMP = ["#dbe9f5", "#a9cbe6", "#6aa6d3", "#2e80bd", "#0a4f86"];
 
   // cfg.modes: [{id, label}], cfg.initial, cfg.group (aria label for the switch), cfg.mapLabel(mode),
@@ -455,7 +495,7 @@
         map = '<div class="rmap"><svg viewBox="0 0 ' + geo.width + " " + geo.height + '" role="group" aria-label="' + esc(cfg.mapLabel(mode)) + '">' +
           Object.keys(geo.regions).filter(function (n) { return byName[n]; }).map(function (n) {
             return '<path class="rpath" data-r="' + esc(n) + '" d="' + geo.regions[n] + '" fill="' + shade(byName[n].v) +
-              '" tabindex="0" role="img" aria-label="' + esc(byName[n].aria) + '"/>';
+              '" tabindex="0" role="link" aria-label="' + esc(byName[n].aria + ". Open the " + n + " page") + '"/>';
           }).join("") + '</svg><div class="maptip" role="tooltip"></div>' +
           '<div class="rlegend"><span>' + esc(b.fmt(vmin)) + '</span><span class="ramp">' +
           RAMP.map(function (c) { return '<i style="background:' + c + '"></i>'; }).join("") + '</span><span>' + esc(b.fmt(vmax)) + "</span></div></div>";
@@ -469,11 +509,11 @@
         '<div class="rwrap' + (geo ? " withmap" : "") + '">' + map +
         '<div class="rlist">' + rows.map(function (i) {
           return '<div class="rrow" tabindex="0" data-r="' + esc(i.name) + '">' +
-            '<span class="rname">' + esc(i.name) + "</span>" +
+            '<span class="rname"><a href="' + esc(rurl(i.name)) + '" tabindex="-1">' + esc(i.name) + "</a></span>" +
             '<span class="rtrack"><span class="rbar" style="width:' + Math.max(0, i.v / max * 100).toFixed(1) + '%"></span>' +
               (nat == null ? "" : '<span class="rnat" style="left:' + nat.toFixed(1) + '%"></span>') + "</span>" +
             '<span class="rval">' + esc(i.val) + "</span>" +
-            '<div class="rtip" role="tooltip">' + i.tip + "</div>" +
+            '<div class="rtip" role="tooltip">' + i.tip + GO + "</div>" +
             "</div>";
         }).join("") + "</div></div>" +
         '<p class="rnote">' + b.note + "</p>";
@@ -490,7 +530,7 @@
         var it = byName[name];
         if (!it) { mtip.className = "maptip"; return; }
         var bx = mapEl.getBoundingClientRect();
-        mtip.innerHTML = it.tip;
+        mtip.innerHTML = it.tip + GO;
         mtip.style.left = Math.min(Math.max(x - bx.left, 90), bx.width - 90) + "px";
         mtip.style.top = (y - bx.top - 12) + "px";
         mtip.className = "maptip on";
@@ -505,6 +545,11 @@
           if (isPath) { var r = el.getBoundingClientRect(); place(name, r.left + r.width / 2, r.top + r.height / 2); }
         });
         el.addEventListener("blur", function () { light(null); if (mtip) mtip.className = "maptip"; });
+        // Click or press Enter to open the region's own page.
+        el.addEventListener("click", function (e) { if (!e.target.closest("a")) location.href = rurl(name); });
+        el.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); location.href = rurl(name); }
+        });
       });
     }
 
@@ -774,9 +819,222 @@
       });
   }
 
+  // ---- region page (region.html?r=Auckland) ---------------------------------------
+
+  function rurl(name) { return "region.html?r=" + encodeURIComponent(name).replace(/'/g, "%27"); }
+  function ordinal(n) {
+    var v = n % 100;
+    return n + ((v >= 11 && v <= 13) ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"));
+  }
+  function pctText(v, dp) { return (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(dp == null ? 1 : dp) + "%"; }
+  function pctHtml(v) { return '<span class="chg ' + (v > 0.05 ? "up" : v < -0.05 ? "down" : "flat") + '">' + esc(pctText(v)) + "</span>"; }
+
+  function renderRegion(data) {
+    var root = $("rpage"), name = new URLSearchParams(location.search).get("r");
+    var R = data.regions, items = R && R.items ? R.items : [];
+    var it = items.filter(function (i) { return i.name === name; })[0];
+    if (!it || !R.history || !R.history.regions[name]) {
+      root.innerHTML = '<p class="crumb"><a href="index.html">← Dashboard</a></p><h1>Region not found</h1>' +
+        '<p>There is no region called "' + esc(name || "") + '". <a href="index.html#regions">See all regions</a>.</p>';
+      return;
+    }
+    var nat = R.national, H = R.history, hr = H.regions[name], hn = H.regions["New Zealand"], years = H.years;
+    document.title = name + " | NZ Vitals";
+    var canon = document.querySelector('link[rel="canonical"]');
+    if (canon) canon.href = "https://nz-vitals.pages.dev/" + rurl(name);
+
+    // ---- numbers -------------------------------------------------------------
+    var rank = function (key, list, getter) {
+      return 1 + list.filter(function (o) { return getter(o) > getter(list.filter(function (x) { return x.name === name; })[0]); }).length;
+    };
+    var gap = function (a, b) { return (a / b - 1) * 100; };
+    var k = years.length - 1;                                   // newest year
+    var at = function (arr, back) { return arr[k - back]; };
+    var growth = function (arr, back) { var a = at(arr, back), b = arr[k]; return a != null && b != null ? (b / a - 1) * 100 : null; };
+    var hourlyGap = gap(it.median_hourly, nat.median_hourly), weeklyGap = gap(it.median_weekly, nat.median_weekly);
+    var rankH = rank("median_hourly", items, function (o) { return o.median_hourly; });
+    var g1 = growth(hr.median_hourly, 1), g1n = growth(hn.median_hourly, 1), g5 = growth(hr.median_hourly, 5), g5n = growth(hn.median_hourly, 5);
+    var peopleShare = it.people / nat.people * 100;
+
+    var P = data.population, pi = P ? P.items.filter(function (i) { return i.name === name; })[0] : null, pBase = null, pLast = null, pGrowth = null, pGrowthN = null, pRank = null, pShare = null;
+    if (pi) {
+      var by0 = String(P.baseYear), by1 = String(P.years[P.years.length - 1]);
+      pBase = pi.values[by0]; pLast = pi.values[by1];
+      pGrowth = (pLast / pBase - 1) * 100; pGrowthN = (P.national[by1] / P.national[by0] - 1) * 100;
+      pShare = pBase / P.national[by0] * 100;
+      pRank = 1 + P.items.filter(function (o) { return o.values[by0] > pBase; }).length;
+    }
+
+    // ---- headline and a plain-English summary -------------------------------------
+    var rel = Math.abs(hourlyGap) < 0.05 ? "the same as" : pctText(Math.abs(hourlyGap)).replace(/^[+−]/, "") + (hourlyGap > 0 ? " above" : " below");
+    var rk = rankH === 1 ? "the highest of the " + items.length + " regions" : rankH === items.length ? "the lowest of the " + items.length + " regions" :
+      "the " + ordinal(rankH) + " highest of the " + items.length + " regions";
+    var lede = name + "'s median hourly earnings were " + fmt(it.median_hourly, "NZ$/h") + " in " + R.periodLabel + ", " + rel +
+      " the New Zealand figure (" + fmt(nat.median_hourly, "NZ$/h") + ") and " + rk + "." +
+      (g5 != null && g5n != null ? " Over the past five years they rose " + g5.toFixed(1) + "%, compared with " + g5n.toFixed(1) + "% for New Zealand overall." : "");
+
+    var head = '<p class="crumb"><a href="index.html">← Dashboard</a> · <a href="index.html#regions">All regions</a></p>' +
+      "<h1>" + esc(name) + '<span class="tag">' + esc(R.periodLabel) + "</span></h1>";
+
+    var box = function (label, big, small) {
+      return '<div class="stat"><span class="label">' + esc(label) + "</span><b>" + big + "</b><small>" + small + "</small></div>";
+    };
+    var stats =
+      box("Median hourly earnings", esc(fmt(it.median_hourly, "NZ$/h")), "New Zealand: " + esc(fmt(nat.median_hourly, "NZ$/h"))) +
+      box("Compared with New Zealand", pctHtml(hourlyGap), esc(ordinal(rankH) + " of " + items.length + " regions (hourly)")) +
+      box("Median weekly earnings", esc(fmt(it.median_weekly, "NZ$/wk")), "New Zealand: " + esc(fmt(nat.median_weekly, "NZ$/wk")) + " (" + esc(pctText(weeklyGap)) + ")") +
+      (g1 != null ? box("Hourly earnings, 1 year", pctHtml(g1), "New Zealand: " + esc(pctText(g1n))) : "") +
+      (g5 != null ? box("Hourly earnings, 5 years", pctHtml(g5), "New Zealand: " + esc(pctText(g5n))) : "") +
+      box("People in paid employment", esc(fmt(it.people, "000")), esc(peopleShare.toFixed(1) + "% of New Zealand")) +
+      (pi ? box("Population, " + P.baseYear, esc(fmt(pBase / 1000, "000")), esc(pShare.toFixed(1) + "% of New Zealand · " + ordinal(pRank) + " largest")) +
+            box("Projected growth to " + by1, pctHtml(pGrowth), "New Zealand: " + esc(pctText(pGrowthN))) : "");
+
+    // ---- charts --------------------------------------------------------------------
+    var series = function (arr) {
+      var out = [];
+      years.forEach(function (y, i) { if (arr[i] != null) out.push({ date: y + "-06-30", label: "June " + y, value: arr[i] }); });
+      return out;
+    };
+    var earn = { id: "region_earn", name: name, unit: "NZ$/h", series: [], compare: { name: "New Zealand", series: [] } };
+    var relInd = { id: "region_rel", name: name + " relative to New Zealand", unit: "index", series: [] };
+    var metric = "hourly";
+    function setMetric(m) {
+      var key = m === "hourly" ? "median_hourly" : "median_weekly";
+      earn.name = name + " median " + m + " earnings";
+      earn.unit = m === "hourly" ? "NZ$/h" : "NZ$/wk";
+      earn.series = series(hr[key]);
+      earn.compare.series = series(hn[key]);
+      relInd.name = name + "'s median " + m + " earnings relative to New Zealand";
+      relInd.series = series(hr[key].map(function (v, i) { return v != null && hn[key][i] != null ? v / hn[key][i] * 100 : null; }));
+    }
+    setMetric(metric);
+
+    var popInd = null;
+    if (pi) {
+      popInd = { id: "region_pop", name: name + " population", unit: "people", fullRange: true, series: P.years.map(function (y) {
+        return { date: y + "-06-30", label: y + (y === P.baseYear ? " (base year)" : " (projected)"), value: pi.values[String(y)] };
+      }) };
+    }
+
+    var body = head +
+      '<div class="hero"><div class="big">' + esc(fmt(it.median_hourly, "NZ$/h")) + " <small>per hour</small></div>" +
+        '<div class="hero-meta">Median hourly earnings, ' + esc(R.periodLabel) + " · " + pctHtml(hourlyGap) + " vs New Zealand</div></div>" +
+      '<p class="lede">' + esc(lede) + "</p>" +
+      '<div class="stats ' + (pi ? "s4" : "s3") + '">' + stats + "</div>" +
+
+      '<section><h2 class="section-title">Earnings over time</h2>' +
+      '<div class="ctrl"><div class="seg" id="metric" role="group" aria-label="Earnings measure">' +
+        '<button type="button" data-k="hourly" aria-pressed="true">Median hourly</button>' +
+        '<button type="button" data-k="weekly" aria-pressed="false">Median weekly</button></div>' +
+        '<div class="seg" id="range" role="group" aria-label="Chart time range">' +
+          '<button type="button" data-y="5" aria-pressed="false">5Y</button>' +
+          '<button type="button" data-y="10" aria-pressed="false">10Y</button>' +
+          '<button type="button" data-y="0" aria-pressed="true">Max</button></div></div>' +
+      '<article class="card bigchart"><div class="chart-host" data-h="320" id="ch-earn"></div></article>' +
+      '<p class="hint">Years to June. Solid line: ' + esc(name) + ". Dashed line: New Zealand overall. Hover over (or tap) the chart to see the values.</p></section>" +
+
+      '<section><h2 class="section-title">Compared with New Zealand</h2>' +
+      '<article class="card bigchart"><div class="chart-host" data-h="240" id="ch-rel"></div></article>' +
+      '<p class="hint" id="relhint"></p></section>' +
+
+      (popInd ? '<section><h2 class="section-title">Population</h2>' +
+        '<article class="card bigchart"><div class="chart-host" data-h="260" id="ch-pop"></div></article>' +
+        '<p class="hint">' + esc(P.baseYear) + " is the base year of Stats NZ's projections (30 June). Later points are the " + esc(P.projection.toLowerCase()) +
+        " scenario at five-year steps. They are projections, not forecasts.</p></section>" : "") +
+
+      '<section><h2 class="section-title">Data</h2><div class="data-actions"><button type="button" class="btn" id="csv">Download earnings CSV</button>' +
+        '<button type="button" class="btn" id="more"></button></div><div id="dtable"></div>' +
+        (popInd ? '<div id="ptable"></div>' : "") + "</section>" +
+
+      '<p class="source">Source: <a href="' + esc(R.url) + '">Stats NZ</a>, earnings for people in paid employment by region (years to June)' +
+        (pi ? ' and <a href="' + esc(P.url) + '">subnational population projections</a>' : "") + ". Earnings are survey estimates. Benefits and investment income are not included. " +
+        (/\//.test(name) ? "This region combines more than one regional council, as in Stats NZ's earnings tables. " : "") + "</p>";
+
+    // previous / next region, north to south
+    var pos = items.indexOf(it), pv = pos > 0 ? items[pos - 1] : null, nx = pos < items.length - 1 ? items[pos + 1] : null;
+    body += '<nav class="pn" aria-label="Other regions">' +
+      (pv ? '<a href="' + esc(rurl(pv.name)) + '">← ' + esc(pv.name) + "</a>" : "<span></span>") +
+      (nx ? '<a href="' + esc(rurl(nx.name)) + '">' + esc(nx.name) + " →</a>" : "<span></span>") + "</nav>";
+    root.innerHTML = body;
+
+    mountChart($("ch-earn"), earn);
+    mountChart($("ch-rel"), relInd);
+    if (popInd) mountChart($("ch-pop"), popInd);
+
+    function relHint() {
+      $("relhint").textContent = "100 means the same as New Zealand overall. Above 100, " + name + " is higher; below 100, it is lower. Based on median " +
+        metric + " earnings.";
+    }
+    relHint();
+
+    $("metric").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-k]");
+      if (!b || b.getAttribute("data-k") === metric) return;
+      metric = b.getAttribute("data-k");
+      [].forEach.call($("metric").querySelectorAll("button"), function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+      setMetric(metric); relHint(); table();
+      charts.forEach(function (f) { f(); });
+    });
+
+    // ---- tables and CSV --------------------------------------------------------------
+    var all = false;
+    function table() {
+      var key = metric === "hourly" ? "median_hourly" : "median_weekly", u = metric === "hourly" ? "NZ$/h" : "NZ$/wk";
+      var idx = years.map(function (_, i) { return i; }).reverse().filter(function (i) { return hr[key][i] != null; });
+      var shown = all ? idx : idx.slice(0, 12);
+      $("dtable").innerHTML = '<table class="dtable"><thead><tr><th scope="col">Year to June</th><th scope="col" class="num">' + esc(name.length > 14 ? "Region" : name) +
+        '</th><th scope="col" class="num">New Zealand</th><th scope="col" class="num">Difference</th><th scope="col" class="num">People employed</th></tr></thead><tbody>' +
+        shown.map(function (i) {
+          var d = hn[key][i] != null ? gap(hr[key][i], hn[key][i]) : null;
+          return "<tr><td>" + years[i] + '</td><td class="num">' + esc(fmt(hr[key][i], u)) + '</td><td class="num">' + (hn[key][i] != null ? esc(fmt(hn[key][i], u)) : "–") +
+            '</td><td class="num">' + (d == null ? "–" : pctHtml(d)) + '</td><td class="num">' + (hr.people[i] != null ? esc(fmt(hr.people[i], "000")) : "–") + "</td></tr>";
+        }).join("") + "</tbody></table>";
+      $("more").textContent = all ? "Show latest 12" : "Show all " + idx.length;
+      $("more").hidden = idx.length <= 12;
+    }
+    table();
+    $("more").addEventListener("click", function () { all = !all; table(); });
+
+    if (popInd) {
+      $("ptable").innerHTML = '<h3 class="group-title">Population</h3><table class="dtable"><thead><tr><th scope="col">Year to 30 June</th><th scope="col" class="num">People</th>' +
+        '<th scope="col" class="num">Share of New Zealand</th><th scope="col" class="num">Change since ' + esc(P.baseYear) + "</th></tr></thead><tbody>" +
+        P.years.map(function (y) {
+          var v = pi.values[String(y)], d = (v / pBase - 1) * 100;
+          return "<tr><td>" + y + (y === P.baseYear ? " (base year)" : " (projected)") + '</td><td class="num">' + esc(Math.round(v).toLocaleString("en-NZ")) +
+            '</td><td class="num">' + esc((v / P.national[String(y)] * 100).toFixed(1)) + '%</td><td class="num">' + (y === P.baseYear ? "–" : pctHtml(d)) + "</td></tr>";
+        }).join("") + "</tbody></table>";
+    }
+
+    $("csv").addEventListener("click", function () {
+      var cols = ["median_hourly", "median_weekly", "average_hourly", "average_weekly", "people"];
+      var rows = ["year_to_june," + cols.join(",") + ",nz_median_hourly,nz_median_weekly"].concat(years.map(function (y, i) {
+        return [y].concat(cols.map(function (c) { return hr[c][i] == null ? "" : hr[c][i]; }),
+          [hn.median_hourly[i] == null ? "" : hn.median_hourly[i], hn.median_weekly[i] == null ? "" : hn.median_weekly[i]]).join(",");
+      }));
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([rows.join("\n") + "\n"], { type: "text/csv" }));
+      a.download = "nz-vitals-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + ".csv";
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+  }
+
+  function startRegion() {
+    rangeYears = 0;   // region pages open on the full history
+    fetch("data/data.json", { cache: "no-cache" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (data) { renderRegion(data); setupRange(); })
+      .catch(function (err) {
+        $("rpage").innerHTML = '<p class="status">Could not load data (' + esc(err.message) + ").</p>";
+      });
+  }
+
   // ---- start ----------------------------------------------------------------
 
   if ($("detail")) { startDetail(); return; }
+  if ($("rpage")) { startRegion(); return; }
   setupRange();
   Promise.all([
     fetch("data/data.json", { cache: "no-cache" }).then(function (r) {
