@@ -6,14 +6,17 @@ A one-page, minimalist dashboard of New Zealand economic indicators.
 
 ```
 index.html            dashboard page
-about.html            methodology (write your own indicator notes here)
+about.html            methodology and indicator notes
+indicator.html        detail page for one indicator (?id=...)
+region.html           detail page for one region (?r=...)
 css/style.css         all styling (Helvetica, white / black / Knicks blue)
+css/header.css        sticky, compact header (two rows on phones); loaded after style.css
 js/app.js             renders cards + SVG charts from data/data.json
 data/data.json        the main data file the site reads
 data/nz-regions.json  simplified outlines of the 12 regions, for the earnings map (from Natural Earth, public domain)
 data/raw/             fallback copies of the source files (RBNZ spreadsheets, Stats NZ earnings and population CSVs)
 favicon.svg, og-image.png, sitemap.xml, robots.txt, _headers   site extras
-scripts/update_data.py  fetch + validate + write data.json (fetchers are stubs)
+scripts/update_data.py  fetch + validate + write data.json and sitemap.xml
 .github/workflows/update.yml  daily cron that runs the script and commits
 ```
 
@@ -29,10 +32,13 @@ scripts/update_data.py  fetch + validate + write data.json (fetchers are stubs)
 
 ## Next steps
 
-1. Fill in one fetcher in `scripts/update_data.py` (start with the OCR) and check the output.
-2. Repeat for the other indicators. The "placeholder data" banner disappears once all fetchers succeed.
-3. Write the indicator notes in `about.html`.
-4. Add attribution and licence wording for each source.
+Most indicators are connected. Still to do:
+
+1. Connect the four items marked "Coming soon": wage growth (Stats NZ Labour Cost Index), non-tradables inflation (Stats NZ),
+   NZX 50 and the GDT dairy price. Check the licence terms for NZX and GDT first.
+2. The "Draft site" banner on the dashboard disappears once no indicator is flagged as a placeholder.
+3. Keep the indicator notes in `about.html` in step with what is actually connected.
+4. Review attribution and licence wording for each source.
 
 ## If the RBNZ blocks the automatic download
 
@@ -44,6 +50,13 @@ The daily job tries to download the RBNZ spreadsheets. If that fails it falls ba
 3. In GitHub, go to Actions > Update data > Run workflow. The site redeploys with the new figures.
 
 If the data goes more than 10 days without updating, the site shows a "may have stopped" notice automatically.
+
+## Header
+
+`css/header.css` makes the header sticky (it stays at the top while scrolling) and, on screens up to 720px wide, lays it out as
+two compact rows: logo and "As of" date on top, a swipeable one-line nav underneath. It also sets `scroll-padding-top` so that
+in-page links such as `#regions` are not hidden behind the header. If you change the header's height, adjust that value to match.
+Each page links it after `css/style.css`.
 
 ## Items marked "Coming soon"
 

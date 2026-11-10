@@ -1,0 +1,96 @@
+/* Sticky, compact site header. Loaded after style.css so it overrides the topbar rules there. */
+
+html {
+  scroll-padding-top: 72px; /* keeps in-page anchors from hiding under the sticky header */
+}
+
+header.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: #fff;
+  border-bottom: 1px solid #ddd;
+}
+
+.skip:focus {
+  z-index: 100;
+}
+
+header.topbar .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+header.topbar .asof {
+  white-space: nowrap;
+}
+
+/* Phones: two compact rows. Row 1 = brand + date, row 2 = swipeable nav. */
+@media (max-width: 720px) {
+  html {
+    scroll-padding-top: 92px;
+  }
+
+  header.topbar .topbar-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2px 12px;
+    padding-top: 8px;
+    padding-bottom: 0;
+  }
+
+  header.topbar .brand {
+    order: 1;
+    gap: 8px;
+  }
+
+  header.topbar .logo {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+    line-height: 28px;
+    border-radius: 7px;
+  }
+
+  header.topbar .brand-name {
+    font-size: 18px;
+    line-height: 1.1;
+  }
+
+  header.topbar .asof {
+    order: 2;
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.2;
+    text-align: right;
+  }
+
+  header.topbar .nav {
+    order: 3;
+    flex: 0 0 100%;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+    margin: 0 -16px;          /* run edge to edge inside the page gutter */
+    padding: 0 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  header.topbar .nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  header.topbar .nav a {
+    flex: 0 0 auto;
+    padding: 8px 8px;
+    font-size: 14px;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+}
