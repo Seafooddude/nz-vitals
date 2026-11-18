@@ -127,6 +127,9 @@
   function fmtDate(p) { return p.label || isoToText(p.date); }
 
   function fmt(v, unit) {
+    if (unit === "NZ$") return "$" + Math.round(v).toLocaleString("en-NZ");
+    if (unit === "NZ$m") return v >= 1000 ? "$" + (v / 1000).toFixed(1) + " billion" : "$" + Math.round(v).toLocaleString("en-NZ") + " million";
+    if (unit === "units") return Math.round(v).toLocaleString("en-NZ");
     if (unit === "NZD/USD") return Number(v).toFixed(4);
     if (unit === "US$/t") return "US$" + Math.round(v).toLocaleString("en-NZ");
     if (unit === "NZ$/h") return "$" + Number(v).toFixed(2);
@@ -416,6 +419,7 @@
     var n = Math.abs(v) >= 1000 ? Math.round(v).toLocaleString("en-NZ") : v.toFixed(dec);
     if (unit === "people") return v >= 1e6 ? (v / 1e6).toFixed(step >= 1e6 ? 0 : step >= 1e5 ? 1 : 2) + "m" : v >= 1e3 ? Math.round(v / 1e3) + "k" : String(Math.round(v));
     if (unit === "000") return Math.round(v) + "k";
+    if (unit === "NZ$") return "$" + (Math.abs(v) >= 1000 ? Math.round(v / 1000) + "k" : String(Math.round(v)));
     return unit === "%" ? n + "%" : unit === "US$/t" ? "US$" + n : (unit === "NZ$/h" || unit === "NZ$/wk") ? "$" + n : n;
   }
 
@@ -452,7 +456,7 @@
   function drawChart(host, ind) {
     var cfg = CFG[ind.id] || {}, step = cfg.step;
     var s = windowed(ind, step);
-    var W = Math.max(host.clientWidth, 220), H = parseInt(host.getAttribute("data-h"), 10) || 200, L = (ind.unit === "NZ$/wk" || ind.unit === "people") ? 50 : 40, R = 12, T = 14, B = 26;
+    var W = Math.max(host.clientWidth, 220), H = parseInt(host.getAttribute("data-h"), 10) || 200, L = (ind.unit === "NZ$/wk" || ind.unit === "people" || ind.unit === "NZ$") ? 50 : 40, R = 12, T = 14, B = 26;
     var t = s.map(function (p) { return Date.parse(p.date); });
     var span = (t[t.length - 1] - t[0]) || 1;
     var vals = s.map(function (p) { return p.value; });
@@ -772,6 +776,60 @@
     });
   }
 
+  // ---- regional economy: GDP per person, GDP and business units (data/regional_profile.json, built from MBIE's download) ----
+
+  function capFirst(t) { return t ? t.charAt(0).toUpperCase() + t.slice(1) : t; }
+
+  function renderEconomy(P, host, geo) {
+    var gy = P.gdpYears, gk = gy.length - 1, last = gy[gk], by = P.businessYears, bk = by.length - 1, lastB = by[bk];
+    var names = Object.keys(P.regions), nz = P.national;
+    var pct = function (v) { return pctText(v); };
+    var chg = function (a, i, back) { return (a[i] / a[i - back] - 1) * 100; };
+    var src = ' Source: <a href="' + esc(P.url) + '">' + esc(P.source) + "</a>. " + esc(P.licence) + ". Dollar figures are in current prices, so they are not adjusted for inflation. " +
+      "Regions are combined the same way as the earnings and population data.";
+    var rowsFor = function (get, val, line) {
+      return names.map(function (n) {
+        var v = get(P.regions[n]);
+        return { name: n, v: v, val: val(v), aria: n + ": " + val(v),
+          tip: "<span>" + esc(n) + "</span><strong>" + esc(val(v)) + "</strong><span>" + esc(line(P.regions[n], v)) + "</span>" };
+      });
+    };
+    regionView(host, geo, {
+      initial: "pc",
+      group: "Regional economy measure",
+      modes: [{ id: "pc", label: "GDP per person" }, { id: "g5", label: "Per-person growth, 5 yrs" }, { id: "gdp", label: "Total GDP" }, { id: "biz", label: "Business units" }],
+      mapLabel: function (m) {
+        return { pc: "Map of GDP per person by region", g5: "Map of five-year growth in GDP per person by region", gdp: "Map of total GDP by region", biz: "Map of business units by region" }[m];
+      },
+      build: function (mode) {
+        if (mode === "pc") {
+          var f = function (v) { return fmt(v, "NZ$"); };
+          return { fmt: f, nat: nz.gdpPerCapita[gk],
+            rows: rowsFor(function (r) { return r.gdpPerCapita[gk]; }, f, function (r, v) {
+              return pctText(v / nz.gdpPerCapita[gk] * 100 - 100) + " vs New Zealand · " + fmt(r.gdp[gk], "NZ$m") + " total GDP";
+            }),
+            note: "GDP per person, year to March " + esc(last) + ": regional GDP divided by the region's population. Dashed line: New Zealand overall (" + esc(fmt(nz.gdpPerCapita[gk], "NZ$")) + "). " +
+              "A high figure can reflect a region with many jobs and few residents, or one with big capital-intensive industries, so it is not the same as household income." + src };
+        }
+        if (mode === "g5") {
+          return { fmt: pct, nat: chg(nz.gdpPerCapita, gk, 5),
+            rows: rowsFor(function (r) { return chg(r.gdpPerCapita, gk, 5); }, pct, function (r) { return fmt(r.gdpPerCapita[gk - 5], "NZ$") + " in " + gy[gk - 5] + " → " + fmt(r.gdpPerCapita[gk], "NZ$") + " in " + last; }),
+            note: "Change in GDP per person between the years to March " + esc(gy[gk - 5]) + " and " + esc(last) + ". Dashed line: New Zealand overall (" + esc(pct(chg(nz.gdpPerCapita, gk, 5))) + ")." + src };
+        }
+        if (mode === "gdp") {
+          var g = function (v) { return fmt(v, "NZ$m"); };
+          return { fmt: g, nat: null,
+            rows: rowsFor(function (r) { return r.gdp[gk]; }, g, function (r, v) { return (v / nz.gdp[gk] * 100).toFixed(1) + "% of New Zealand's " + fmt(nz.gdp[gk], "NZ$m"); }),
+            note: "Total regional GDP, year to March " + esc(last) + ". New Zealand: " + esc(fmt(nz.gdp[gk], "NZ$m")) + "." + src };
+        }
+        var u = function (v) { return fmt(v, "units"); };
+        return { fmt: u, nat: null,
+          rows: rowsFor(function (r) { return r.businesses[bk]; }, u, function (r, v) { return (v / nz.businesses[bk] * 100).toFixed(1) + "% of New Zealand · " + pct(chg(r.businesses, bk, 5)) + " in 5 years (New Zealand " + pct(chg(nz.businesses, bk, 5)) + ")"; }),
+          note: "Business units (Stats NZ business demography), February " + esc(lastB) + ". New Zealand: " + esc(u(nz.businesses[bk])) + "." + src };
+      }
+    });
+  }
+
   // ---- trend sections -----------------------------------------------------------
 
   function renderTrends(data) {
@@ -954,7 +1012,7 @@
   function pctText(v, dp) { return (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(dp == null ? 1 : dp) + "%"; }
   function pctHtml(v) { return '<span class="chg ' + (v > 0.05 ? "up" : v < -0.05 ? "down" : "flat") + '">' + esc(pctText(v)) + "</span>"; }
 
-  function renderRegion(data) {
+  function renderRegion(data, prof) {
     var root = $("rpage"), name = new URLSearchParams(location.search).get("r");
     var R = data.regions, items = R && R.items ? R.items : [];
     var it = items.filter(function (i) { return i.name === name; })[0];
@@ -1041,6 +1099,51 @@
       }) };
     }
 
+    // ---- regional economy (GDP per person, business units, industries) from data/regional_profile.json ----
+    var econ = "", gdpInd = null, bizInd = null, PR = prof && prof.regions ? prof.regions[name] : null, PN = prof ? prof.national : null;
+    if (PR) {
+      var gy = prof.gdpYears, gk = gy.length - 1, byr = prof.businessYears, bk = byr.length - 1, pnames = Object.keys(prof.regions);
+      var pcNow = PR.gdpPerCapita[gk], pcNat = PN.gdpPerCapita[gk];
+      var pcRank = 1 + pnames.filter(function (n) { return prof.regions[n].gdpPerCapita[gk] > pcNow; }).length;
+      var chg = function (a, i, back) { return (a[i] / a[i - back] - 1) * 100; };
+      var pc5 = chg(PR.gdpPerCapita, gk, 5), pc5n = chg(PN.gdpPerCapita, gk, 5);
+      var b5 = chg(PR.businesses, bk, 5), b5n = chg(PN.businesses, bk, 5);
+      gdpInd = { id: "region_gdppc", name: name + " GDP per person", unit: "NZ$", fullRange: true,
+        series: gy.map(function (y, i) { return { date: y + "-03-31", label: "Year to March " + y, value: PR.gdpPerCapita[i] }; }),
+        compare: { name: "New Zealand", series: gy.map(function (y, i) { return { date: y + "-03-31", label: "Year to March " + y, value: PN.gdpPerCapita[i] }; }) } };
+      var idxOf = function (a) { return byr.map(function (y, i) { return { date: y + "-02-28", label: "February " + y, value: a[i] / a[0] * 100 }; }); };
+      bizInd = { id: "region_biz", name: name + " business units (2000 = 100)", unit: "index", fullRange: true, series: idxOf(PR.businesses), compare: { name: "New Zealand", series: idxOf(PN.businesses) } };
+      var rowsInd = PR.industries.map(function (x) {
+        return "<tr><td>" + esc(capFirst(x.name)) + '</td><td class="num">' + esc(x.share.toFixed(1)) + '%</td><td class="num">' + esc(x.nzShare.toFixed(1)) + "%</td></tr>";
+      }).join("");
+      var rowsYr = gy.map(function (_, i) { return i; }).slice(-10).reverse().map(function (i) {
+        var bi = byr.indexOf(gy[i]), d = (PR.gdpPerCapita[i] / PN.gdpPerCapita[i] - 1) * 100;
+        return "<tr><td>" + gy[i] + '</td><td class="num">' + esc(fmt(PR.gdpPerCapita[i], "NZ$")) + '</td><td class="num">' + esc(fmt(PN.gdpPerCapita[i], "NZ$")) +
+          '</td><td class="num">' + pctHtml(d) + '</td><td class="num">' + esc(fmt(PR.gdp[i], "NZ$m")) + '</td><td class="num">' + (bi < 0 ? "–" : esc(fmt(PR.businesses[bi], "units"))) + "</td></tr>";
+      }).join("");
+      var pcGap = (pcNow / pcNat - 1) * 100;
+      econ = '<section><h2 class="section-title">Economic activity</h2>' +
+        '<p class="lede">' + esc(name) + "'s GDP per person was " + esc(fmt(pcNow, "NZ$")) + " in the " + esc(prof.gdpPeriod) + ", " + esc(pctText(Math.abs(pcGap)).replace(/^[+−]/, "")) +
+        (pcGap >= 0 ? " above" : " below") + " the New Zealand figure (" + esc(fmt(pcNat, "NZ$")) + "), " + esc(ordinal(pcRank)) + " highest of the " + pnames.length + " regions.</p>" +
+        '<div class="stats s4">' +
+          box("GDP per person, " + gy[gk], esc(fmt(pcNow, "NZ$")), esc(ordinal(pcRank) + " of " + pnames.length + " regions")) +
+          box("GDP per person, 5 years", pctHtml(pc5), "New Zealand: " + esc(pctText(pc5n))) +
+          box("Total GDP", esc(fmt(PR.gdp[gk], "NZ$m")), esc((PR.gdp[gk] / PN.gdp[gk] * 100).toFixed(1) + "% of New Zealand")) +
+          box("Business units, " + byr[bk], esc(fmt(PR.businesses[bk], "units")), esc(pctText(b5) + " in 5 years (New Zealand " + pctText(b5n) + ")")) +
+        "</div>" +
+        '<article class="card bigchart"><div class="chart-host" data-h="260" id="ch-gdp"></div></article>' +
+        '<p class="hint">GDP per person, years to March, in current prices (not adjusted for inflation). Solid line: ' + esc(name) + ". Dashed line: New Zealand overall.</p>" +
+        '<article class="card bigchart"><div class="chart-host" data-h="240" id="ch-biz"></div></article>' +
+        '<p class="hint">Business units, February each year, with 2000 set to 100 so the region and New Zealand can be compared.</p>' +
+        '<h3 class="group-title">Biggest industries, year to March ' + esc(prof.industryYear) + '</h3>' +
+        '<table class="dtable"><thead><tr><th scope="col">Industry</th><th scope="col" class="num">Share of ' + esc(name.length > 14 ? "region" : name) + ' GDP</th><th scope="col" class="num">New Zealand</th></tr></thead><tbody>' + rowsInd + "</tbody></table>" +
+        '<h3 class="group-title">Last ten years</h3>' +
+        '<table class="dtable"><thead><tr><th scope="col">Year to March</th><th scope="col" class="num">GDP per person</th><th scope="col" class="num">New Zealand</th><th scope="col" class="num">Difference</th><th scope="col" class="num">Total GDP</th><th scope="col" class="num">Business units</th></tr></thead><tbody>' + rowsYr + "</tbody></table>" +
+        '<p class="source">Source: <a href="' + esc(prof.url) + '">' + esc(prof.source) + "</a>. " + esc(prof.licence) + ". " +
+          (/\//.test(name) ? "This region combines more than one regional council. " : "") +
+          'More on this region elsewhere: <a href="https://webrear.mbie.govt.nz/">MBIE Regional Economic Activity tool</a> · <a href="https://regions.infometrics.co.nz/new-zealand">Infometrics Regional Economic Profile</a> (an independent site, not part of NZ Vitals).</p></section>';
+    }
+
     var body = head +
       '<div class="hero"><div class="big">' + esc(fmt(it.median_hourly, "NZ$/h")) + " <small>per hour</small></div>" +
         '<div class="hero-meta">Median hourly earnings, ' + esc(R.periodLabel) + " · " + pctHtml(hourlyGap) + " vs New Zealand</div></div>" +
@@ -1061,6 +1164,8 @@
       '<section><h2 class="section-title">Compared with New Zealand</h2>' +
       '<article class="card bigchart"><div class="chart-host" data-h="240" id="ch-rel"></div></article>' +
       '<p class="hint" id="relhint"></p></section>' +
+
+      econ +
 
       (popInd ? '<section><h2 class="section-title">Population</h2>' +
         '<article class="card bigchart"><div class="chart-host" data-h="260" id="ch-pop"></div></article>' +
@@ -1086,6 +1191,7 @@
     mountChart($("ch-earn"), earn);
     mountChart($("ch-rel"), relInd);
     if (popInd) mountChart($("ch-pop"), popInd);
+    if (gdpInd) { mountChart($("ch-gdp"), gdpInd); mountChart($("ch-biz"), bizInd); }
     $("png").addEventListener("click", function () { saveChart($("ch-earn"), earn, "Stats NZ"); });
 
     function relHint() {
@@ -1147,12 +1253,12 @@
 
   function startRegion() {
     rangeYears = 0;   // region pages open on the full history
-    fetch("data/data.json", { cache: "no-cache" })
-      .then(function (r) {
+    var profile = fetch("data/regional_profile.json").then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+    Promise.all([fetch("data/data.json", { cache: "no-cache" }).then(function (r) {
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
-      })
-      .then(function (data) { renderRegion(data); setupRange(); })
+      }), profile])
+      .then(function (res) { renderRegion(res[0], res[1]); setupRange(); })
       .catch(function (err) {
         $("rpage").innerHTML = '<p class="status">Could not load data (' + esc(err.message) + ").</p>";
       });
@@ -1273,10 +1379,11 @@
       return r.json();
     }),
     // The map is optional: if it fails to load, the bars still show.
-    fetch("data/nz-regions.json").then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+    fetch("data/nz-regions.json").then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+    fetch("data/regional_profile.json").then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
   ])
     .then(function (res) {
-      var data = res[1], geo = res[2];
+      var data = res[1], geo = res[2], profile = res[3];
       var by = {};
       data.indicators.forEach(function (ind) { by[ind.id] = ind; });
 
@@ -1295,6 +1402,11 @@
       if (data.population && $("population")) {
         renderPopulation(data.population, $("population-body"), geo);
         $("population").hidden = false;
+      }
+      // The regional economy section is optional too: it stays hidden without data/regional_profile.json.
+      if (profile && profile.regions && $("economy")) {
+        renderEconomy(profile, $("economy-body"), geo);
+        $("economy").hidden = false;
       }
       renderTrends(data);
 

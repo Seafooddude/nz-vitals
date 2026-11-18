@@ -2,7 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://nz-vitals.pages.dev/</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
@@ -14,7 +14,7 @@
   </url>
   <url>
     <loc>https://nz-vitals.pages.dev/briefing.html</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.6</priority>
   </url>
@@ -26,7 +26,7 @@
   </url>
   <url>
     <loc>https://nz-vitals.pages.dev/indicator.html?id=unemployment</loc>
-    <lastmod>2026-09-30</lastmod>
+    <lastmod>2026-06-30</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -38,7 +38,7 @@
   </url>
   <url>
     <loc>https://nz-vitals.pages.dev/indicator.html?id=houses</loc>
-    <lastmod>2026-06-30</lastmod>
+    <lastmod>2026-03-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -55,14 +55,8 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://nz-vitals.pages.dev/indicator.html?id=current_account</loc>
-    <lastmod>2026-06-30</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
     <loc>https://nz-vitals.pages.dev/indicator.html?id=ocr</loc>
-    <lastmod>2026-11-06</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -74,7 +68,7 @@
   </url>
   <url>
     <loc>https://nz-vitals.pages.dev/indicator.html?id=nzdusd</loc>
-    <lastmod>2026-11-13</lastmod>
+    <lastmod>2026-11-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -86,73 +80,73 @@
   </url>
   <url>
     <loc>https://nz-vitals.pages.dev/region.html?r=Northland</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://nz-vitals.pages.dev/region.html?r=Auckland</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://nz-vitals.pages.dev/region.html?r=Waikato</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://nz-vitals.pages.dev/region.html?r=Bay%20of%20Plenty</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://nz-vitals.pages.dev/region.html?r=Gisborne%2FHawke%27s%20Bay</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://nz-vitals.pages.dev/region.html?r=Taranaki</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://nz-vitals.pages.dev/region.html?r=Manawatu-Whanganui</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://nz-vitals.pages.dev/region.html?r=Wellington</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://nz-vitals.pages.dev/region.html?r=Nelson%2FTasman%2FMarlborough%2FWest%20Coast</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://nz-vitals.pages.dev/region.html?r=Canterbury</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://nz-vitals.pages.dev/region.html?r=Otago</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://nz-vitals.pages.dev/region.html?r=Southland</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>

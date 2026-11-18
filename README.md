@@ -182,3 +182,18 @@ Clicking a region on either map, or in either list, opens `region.html?r=<region
 hourly or weekly, with a 5Y / 10Y / Max switch), the gap to New Zealand over time, the population base year and projections,
 ranks among the 12 regions, a table and a CSV download. The history comes from the `history` block that `fetch_regions()` writes
 under `regions` in `data.json`. The update script lists every region page in `sitemap.xml`.
+
+## Regional economy (GDP per person, business units, industries)
+
+`data/regional_profile.json` feeds the "Regional Economy" section on the home page and the "Economic activity" block on each region page.
+It is built by hand, not by the daily job, from the Ministry of Business, Innovation & Employment's Regional Economic Activity download
+(`all-data.csv`, about 280 MB, so it is not kept in the repo; everything in it is licensed CC BY 4.0). To refresh it when new regional GDP is
+published (around March each year):
+
+1. Download the full data from https://webrear.mbie.govt.nz/ (the "all data" zip) and unzip it.
+2. Run `python scripts/build_regional_profile.py path/to/all-data.csv`. It combines the 16 regional councils into the same 12 regions as the
+   earnings data and checks that the regions add up to New Zealand.
+3. Commit the new `data/regional_profile.json`.
+
+Dollar figures are in current prices. The home page and region pages still work without the file; the section is simply hidden.
+Infometrics' regional profile site is linked from each region page but its data is not copied (it is a commercial product).
